@@ -1,0 +1,38 @@
+
+
+services:
+  comfyui:
+    # Uses a popular pre-configured image for ComfyUI with CUDA 12.1 support
+    # Supports Flux, SDXL, etc. out of the box.
+    image: yanwk/comfyui-boot:cu121
+    container_name: comfyui-server
+    
+    # Expose the API port
+    ports:
+      - "8188:8188"
+    
+    # Persistent storage
+    volumes:
+      # Map the entire ComfyUI directory so we can pre-clone it on host
+      - ./comfy_data:/home/runner/ComfyUI
+      # We don't need separate sub-volume maps if we map the root, 
+      # but we DO need to ensure the host folder permissions are okay.
+      # Simplified mapping:
+      
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      
+    # Fix for "dubious ownership" error on Windows mounts
+    command: bash -c "git config --global --add safe.directory /home/runner/ComfyUI && bash /home/scripts/entrypoint.sh"
+      - CLI_ARGS=--listen 0.0.0.0 --port 8188 --preview-method auto
+      
+    # GPU Access Configuration
+    deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                count: all
+                capabilities: [gpu]
+                
+    restart: unless-stopped
