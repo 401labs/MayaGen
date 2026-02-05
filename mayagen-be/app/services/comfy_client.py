@@ -34,7 +34,7 @@ class ComfyUIProvider:
         with urllib.request.urlopen(f"http://{self.server_address}/history/{prompt_id}") as response:
             return json.loads(response.read())
 
-    def generate(self, prompt_text: str, output_path: str):
+    def generate(self, prompt_text: str, output_path: str, width: int = 512, height: int = 768):
         """
         Main function to generate an image from text.
         """
@@ -46,20 +46,34 @@ class ComfyUIProvider:
         workflow = self.load_workflow(config.COMFYUI["workflow_json_path"])
         
         # 3. Inject Prompt (Scanning for CLIPTextEncode nodes)
-        # Assuming Node 6 is the positive prompt (Standard in our workflows)
-        # A more robust way is to finding node by class_type, but by ID is faster for fixed templates.
         if "6" in workflow:
            workflow["6"]["inputs"]["text"] = prompt_text
-           print("[ComfyUI] Updated Node 6 (CLIPTextEncode) with prompt.")
-        else:
-           print("[Warning] Node 6 not found in workflow. Prompt might not be applied!")
+           print("[ComfyUI] Updated prompt.")
 
-        # 4. Send to Queue
+        # 4. Inject Resolution (Scanning for EmptyLatentImage)
+        # We look for the node that creates the blank canvas
+        found_latent = False
+        for node_id, node in workflow.items():
+            if node.get("class_type") == "EmptyLatentImage":
+                node["inputs"]["width"] = width
+                node["inputs"]["height"] = height
+                print(f"[ComfyUI] Updated resolution to {width}x{height}")
+                found_latent = True
+                break
+        
+        if not found_latent:
+            # Fallback for SD1.5 templates where node 5 is usually it
+            if "5" in workflow:
+                workflow["5"]["inputs"]["width"] = width
+                workflow["5"]["inputs"]["height"] = height
+                print(f"[ComfyUI] Updated resolution (Fallback ID 5) to {width}x{height}")
+
+        # 5. Send to Queue
         prompt_response = self.queue_prompt(workflow)
         prompt_id = prompt_response['prompt_id']
         print(f"[ComfyUI] Prompt queued: {prompt_id}")
 
-        # 5. Listen for Result
+        # 6. Listen for Result
         while True:
             out = self.ws.recv()
             if isinstance(out, str):
@@ -72,10 +86,10 @@ class ComfyUIProvider:
             else:
                 continue # Binary data (previews), ignore
 
-        # 6. Retrieve Image History
+        # 7. Retrieve Image History
         history = self.get_history(prompt_id)[prompt_id]
         
-        # 7. Download Image
+        # 8. Download Image
         for o in history['outputs']:
             for node_id in history['outputs']:
                 node_output = history['outputs'][node_id]

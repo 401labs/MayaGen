@@ -10,7 +10,7 @@ def load_prompts(file_path):
 
 def run_batch_generation():
     print("============================================")
-    print(" SYNTHETIC DATA GENERATOR - COMFYUI ")
+    print(" MAYAGEN - SYNTHETIC DATA GENERATOR ")
     print("============================================")
 
     # 1. Setup
