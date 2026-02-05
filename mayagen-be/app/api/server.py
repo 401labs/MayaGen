@@ -58,7 +58,7 @@ def health_check():
 @app.get("/images")
 async def list_images(
     session: AsyncSession = Depends(get_session),
-    current_user: Optional[User] = Depends(deps.get_current_user) # Optional auth for now
+    current_user: Optional[User] = Depends(deps.get_current_user_optional) # Optional auth
 ):
     """Lists generated images. Public feed."""
     base_url = "http://127.0.0.1:8000/images"
@@ -90,6 +90,47 @@ async def list_images(
         })
         
     return {"images": response_list}
+
+@app.get("/api/images/{image_id}")
+async def get_image(
+    image_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: Optional[User] = Depends(deps.get_current_user_optional)
+):
+    """Get a single image detail."""
+    base_url = "http://127.0.0.1:8000/images"
+    
+    # Query with User join
+    statement = select(Image, User).where(Image.id == image_id).join(User, isouter=True)
+    result = await session.execute(statement)
+    row = result.first()
+    
+    if not row:
+        raise HTTPException(status_code=404, detail="Image not found")
+        
+    img, user = row
+    
+    try:
+         rel_path = os.path.relpath(img.file_path, config.OUTPUT_FOLDER)
+         safe_rel_path = rel_path.replace("\\", "/")
+         url = f"{base_url}/{safe_rel_path}"
+    except ValueError:
+         url = f"{base_url}/{img.filename}"
+
+    return {
+        "id": img.id,
+        "filename": img.filename,
+        "category": img.category,
+        "url": url,
+        "prompt": img.prompt,
+        "width": img.width,
+        "height": img.height,
+        "model": img.model,
+        "provider": img.provider,
+        "created_at": img.created_at,
+        "created_by": user.username if user else "Anonymous",
+        "is_public": img.is_public
+    }
 
 @app.post("/generate")
 async def generate_image(

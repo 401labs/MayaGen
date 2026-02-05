@@ -33,5 +33,23 @@ async def get_current_user(
         raise credentials_exception
     return user
 
+async def get_current_user_optional(
+    token: Optional[str] = Depends(oauth2_scheme),
+    session: AsyncSession = Depends(get_session)
+) -> Optional[User]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, security.SECRET_KEY, algorithms=[security.ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+    except JWTError:
+        return None
+        
+    result = await session.execute(select(User).where(User.username == username))
+    user = result.scalars().first()
+    return user
+
 async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
     return current_user

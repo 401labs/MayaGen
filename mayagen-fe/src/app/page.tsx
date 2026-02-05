@@ -252,7 +252,11 @@ export default function Home() {
           {/* Masonry Layout using CSS Columns */}
           <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
               {gallery.map((img, idx) => (
-                  <div key={idx} className="break-inside-avoid relative group rounded-xl overflow-hidden bg-neutral-900 border border-neutral-800 hover:border-indigo-500/50 transition-colors">
+                  <Link 
+                      href={`/image/${img.id}`} 
+                      key={idx} 
+                      className="break-inside-avoid relative group rounded-xl overflow-hidden bg-neutral-900 border border-neutral-800 hover:border-indigo-500/50 transition-colors block mb-4"
+                  >
                       {/* Image - Natural Aspect Ratio */}
                       <img 
                           src={img.url} 
@@ -262,10 +266,12 @@ export default function Home() {
                       />
                       
                       {/* Overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-4">
+                          <p className="text-white text-sm line-clamp-3 mb-3 font-medium text-shadow">{img.prompt}</p>
+                          
                           <div className="flex items-center justify-between">
                               <div className="flex flex-col items-start gap-1">
-                                <Badge className="bg-white/10 backdrop-blur hover:bg-white/20 text-white border-none">
+                                <Badge className="bg-white/10 backdrop-blur hover:bg-white/20 text-white border-none pointer-events-none">
                                     {img.category}
                                 </Badge>
                                 <span className="text-[10px] text-neutral-400 flex items-center gap-1">
@@ -273,17 +279,9 @@ export default function Home() {
                                     {img.created_by || "Anonymous"}
                                 </span>
                               </div>
-                              <a 
-                                  href={img.url} 
-                                  target="_blank" 
-                                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
-                                  title="Open Original"
-                              >
-                                  <FolderOpen className="w-4 h-4" />
-                              </a>
                           </div>
                       </div>
-                  </div>
+                  </Link>
               ))}
           </div>
           
