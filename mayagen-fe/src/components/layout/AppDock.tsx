@@ -11,7 +11,7 @@ import {
   LogIn,
   LogOut,
   Settings,
-  FolderOpen,
+  Layers,
 } from "lucide-react";
 
 export function AppDock() {
@@ -35,9 +35,9 @@ export function AppDock() {
       href: "/gallery",
     },
     {
-      title: "Categories",
-      icon: <FolderOpen className="h-full w-full text-amber-400" />,
-      href: "/categories",
+      title: "Bulk Generate",
+      icon: <Layers className="h-full w-full text-amber-400" />,
+      href: "/bulk",
     },
   ];
 

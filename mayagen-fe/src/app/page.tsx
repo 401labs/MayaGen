@@ -5,7 +5,8 @@ import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Sparkles, Send, Image as ImageIcon, Zap, Layers, Settings2, ChevronDown, ArrowRight, Lock, Wand2, Database, Cpu } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, Sparkles, Send, Image as ImageIcon, Zap, Layers, Settings2, ChevronDown, ArrowRight, Lock, Wand2, Database, Cpu, FolderOpen } from "lucide-react";
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from "sonner";
@@ -42,6 +43,7 @@ export default function Home() {
   const [height, setHeight] = useState(512);
   const [provider, setProvider] = useState('comfyui');
   const [model, setModel] = useState('sd15');
+  const [category, setCategory] = useState('uncategorized');
 
   // Auto-resize textarea
   useEffect(() => {
@@ -86,7 +88,7 @@ export default function Home() {
         height,
         provider,
         model,
-        category: "uncategorized"
+        category: category || "uncategorized"
       });
 
       if (response.data.success) {
@@ -233,7 +235,19 @@ export default function Home() {
             {/* Advanced Settings Panel */}
             {showAdvanced && user && (
               <div className="border-t border-neutral-800 p-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs text-neutral-400 flex items-center gap-1.5">
+                      <FolderOpen className="w-3.5 h-3.5" /> Category
+                    </label>
+                    <Input
+                      placeholder="animals/cats"
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="h-9 bg-neutral-800 border-neutral-700 text-sm"
+                    />
+                  </div>
+                  
                   <div className="space-y-2">
                     <label className="text-xs text-neutral-400 flex items-center gap-1.5">
                       <Layers className="w-3.5 h-3.5" /> Model
@@ -318,7 +332,7 @@ export default function Home() {
       </section>
 
       {/* Features */}
-      <section className="px-4 mb-16">
+      {/* <section className="px-4 mb-16">
         <div className="max-w-4xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FeatureCard
@@ -338,7 +352,7 @@ export default function Home() {
             />
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* Recent Creations */}
       <section className="px-4">

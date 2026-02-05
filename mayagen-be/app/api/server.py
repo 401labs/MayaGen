@@ -7,7 +7,7 @@ from ..core import config
 from ..database import init_db
 from ..services.worker import worker_loop
 from ..helpers import api_response_helper as responses
-from . import auth, images, jobs
+from . import auth, images, jobs, batch
 import asyncio
 
 app = FastAPI(title="MayaGen FastAPI")
@@ -55,6 +55,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(images.router, tags=["images"])
 app.include_router(jobs.router, tags=["jobs"])
+app.include_router(batch.router, tags=["batch"])
 
 # Mount static files
 app.mount("/images", StaticFiles(directory=config.OUTPUT_FOLDER), name="images")

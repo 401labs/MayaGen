@@ -5,9 +5,10 @@ from datetime import datetime
 from sqlmodel import select
 from sqlalchemy import text
 from app.database import get_session_context
-from app.models import Image, JobStatus
+from app.models import Image, JobStatus, BatchJob, BatchJobStatus
 from app.core import config
 from app.services.comfy_client import ComfyUIProvider
+from app.services.prompt_generator import generate_prompts
 
 # Setup Logging
 logger = logging.getLogger("worker")
@@ -65,6 +66,10 @@ async def process_job(image_id: int):
             session.add(job)
             await session.commit()
             logger.info(f"Job {job.id} COMPLETED.")
+            
+            # 4. Update batch job progress if applicable
+            if job.batch_job_id:
+                await update_batch_progress(job.batch_job_id, success=True)
 
         except Exception as e:
             logger.error(f"Job {job.id} FAILED: {e}")
@@ -72,12 +77,109 @@ async def process_job(image_id: int):
             job.error_message = str(e)
             session.add(job)
             await session.commit()
+            
+            # Update batch job progress
+            if job.batch_job_id:
+                await update_batch_progress(job.batch_job_id, success=False)
+
+
+async def update_batch_progress(batch_id: int, success: bool):
+    """Update batch job progress after an image completes."""
+    async with get_session_context() as session:
+        result = await session.execute(select(BatchJob).where(BatchJob.id == batch_id))
+        batch = result.scalars().first()
+        
+        if batch:
+            if success:
+                batch.generated_count += 1
+            else:
+                batch.failed_count += 1
+            
+            # Check if batch is complete
+            total_processed = batch.generated_count + batch.failed_count
+            if total_processed >= batch.total_images:
+                batch.status = BatchJobStatus.COMPLETED
+                logger.info(f"Batch {batch.id} COMPLETED: {batch.generated_count} success, {batch.failed_count} failed")
+            
+            batch.updated_at = datetime.utcnow()
+            session.add(batch)
+            await session.commit()
+
+
+async def process_batch_jobs():
+    """
+    Poll for QUEUED batch jobs, generate prompts, and create Image records.
+    """
+    async with get_session_context() as session:
+        # Find next QUEUED batch job
+        result = await session.execute(
+            select(BatchJob)
+            .where(BatchJob.status == BatchJobStatus.QUEUED)
+            .order_by(BatchJob.created_at.asc())
+            .limit(1)
+        )
+        batch = result.scalars().first()
+        
+        if not batch:
+            return False  # No batch jobs to process
+        
+        logger.info(f"Processing Batch Job {batch.id}: {batch.name} ({batch.total_images} images)")
+        
+        try:
+            # Mark as generating
+            batch.status = BatchJobStatus.GENERATING
+            session.add(batch)
+            await session.commit()
+            
+            # Generate prompts
+            prompts = generate_prompts(
+                target_subject=batch.target_subject,
+                total_images=batch.total_images,
+                variations=batch.variations,
+                template=batch.base_prompt_template,
+                unique=True
+            )
+            
+            # Create Image records for each prompt
+            for i, prompt in enumerate(prompts):
+                filename = f"{batch.category.replace('/', '_')}_{batch.id}_{i+1:04d}.png"
+                
+                image = Image(
+                    prompt=prompt,
+                    filename=filename,
+                    category=batch.category,
+                    model=batch.model,
+                    provider=batch.provider,
+                    width=batch.width,
+                    height=batch.height,
+                    user_id=batch.user_id,
+                    batch_job_id=batch.id,
+                    status=JobStatus.PENDING
+                )
+                session.add(image)
+            
+            await session.commit()
+            logger.info(f"Created {len(prompts)} image jobs for batch {batch.id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Batch Job {batch.id} FAILED: {e}")
+            batch.status = BatchJobStatus.FAILED
+            batch.error_message = str(e)
+            session.add(batch)
+            await session.commit()
+            return False
+
 
 async def worker_loop():
     logger.info("Worker started inside Server Process...")
     
     while True:
         try:
+            # 1. First, check for QUEUED batch jobs to expand
+            await process_batch_jobs()
+            
+            # 2. Then, process individual image jobs
             async with get_session_context() as session:
                 # ACID Transaction for Queue Popping
                 statement = text("""
@@ -113,3 +215,4 @@ async def worker_loop():
         except Exception as e:
             logger.error(f"Worker Loop Error: {e}")
             await asyncio.sleep(5)
+
