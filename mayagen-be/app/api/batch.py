@@ -252,3 +252,65 @@ async def get_variation_presets(
         message="Variation presets retrieved",
         data={"presets": DEFAULT_VARIATIONS}
     )
+
+
+@router.get("/batch/{batch_id}/images")
+async def get_batch_images(
+    batch_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """Get all images for a specific batch job."""
+    try:
+        # Verify batch belongs to user
+        batch_stmt = select(BatchJob).where(
+            BatchJob.id == batch_id,
+            BatchJob.user_id == current_user.id
+        )
+        batch_result = await session.execute(batch_stmt)
+        batch = batch_result.scalar_one_or_none()
+
+        if not batch:
+            return responses.api_error(status_code=404, message="Not Found", error="Batch job not found")
+
+        # Get all images for this batch
+        base_url = "http://127.0.0.1:8000/images"
+        statement = (
+            select(Image)
+            .where(Image.batch_job_id == batch_id)
+            .order_by(Image.created_at.desc())
+        )
+        results = await session.execute(statement)
+        images = results.scalars().all()
+
+        image_list = []
+        for img in images:
+            url = None
+            if img.status == JobStatus.COMPLETED:
+                safe_category = img.category.replace("\\", "/") if img.category else "uncategorized"
+                url = f"{base_url}/{safe_category}/{img.filename}"
+
+            image_list.append({
+                "id": img.id,
+                "filename": img.filename,
+                "category": img.category,
+                "url": url,
+                "prompt": img.prompt,
+                "model": img.model,
+                "status": img.status,
+                "created_at": img.created_at.isoformat()
+            })
+
+        return responses.api_success(
+            message="Batch images retrieved",
+            data={
+                "batch_id": batch_id,
+                "batch_name": batch.name,
+                "images": image_list,
+                "total": len(image_list)
+            }
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return responses.api_error(status_code=500, message="Failed to get batch images", error=str(e))
