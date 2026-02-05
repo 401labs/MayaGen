@@ -1,15 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Cpu, Cloud, Settings, Layers, FolderOpen } from "lucide-react";
+import { Loader2, Sparkles, Image as ImageIcon, AlertCircle, Cpu, Layers, FolderOpen, LogOut, User, Lock, Settings } from "lucide-react";
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
+  const { user, logout, loading: authLoading } = useAuth();
+  const router = useRouter();
+  
   const [prompt, setPrompt] = useState('');
   const [width, setWidth] = useState(512);
   const [height, setHeight] = useState(768);
@@ -18,16 +24,15 @@ export default function Home() {
   const [category, setCategory] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [gallery, setGallery] = useState<{url: string, filename: string, category: string}[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [gallery, setGallery] = useState<{url: string, filename: string, category: string, created_by: string}[]>([]);
 
   // Fetch Gallery
   const fetchGallery = async () => {
       try {
-          const res = await fetch('http://127.0.0.1:8000/images');
-          if (res.ok) {
-              const data = await res.json();
-              setGallery(data.images);
-          }
+          // Use api client but it works without token too (public endpoint)
+          const res = await api.get('/images');
+          setGallery(res.data.images);
       } catch (e) {
           console.error("Failed to fetch gallery", e);
       }
@@ -40,17 +45,16 @@ export default function Home() {
 
   const generateImage = async () => {
     if (!prompt) return;
+    if (!user) {
+        router.push("/login");
+        return;
+    }
     
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const response = await api.post('/generate', {
           prompt,
           filename_prefix: "mayagen_ui",
           width,
@@ -58,39 +62,65 @@ export default function Home() {
           provider,
           model,
           category: category || "uncategorized"
-        }),
       });
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      if (data.status === 'success') {
+      if (response.data.status === 'success') {
         fetchGallery(); // Refresh gallery to show new image
       } else {
         setError("Generation failed without details.");
       }
 
-    } catch (err) {
-        setError(err instanceof Error ? err.message : "An unknown error occurred");
+    } catch (err: any) {
+        setError(err.response?.data?.detail || err.message || "An unknown error occurred");
     } finally {
       setIsLoading(false);
     }
   };
+
+  if (authLoading) return null; // Or a loading spinner
 
   return (
     <div className="flex h-screen bg-neutral-950 text-neutral-100 overflow-hidden font-sans">
       
       {/* Sidebar: Controls */}
       <aside className="w-96 flex-shrink-0 border-r border-neutral-800 bg-neutral-900/50 backdrop-blur p-6 overflow-y-auto hidden md:block">
-        <div className="flex items-center gap-2 mb-8">
-            <Sparkles className="w-6 h-6 text-indigo-400" />
-            <span className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">MayaGen</span>
-            <Badge variant="outline" className="ml-auto border-indigo-500/30 text-indigo-400 text-xs">v1.2 Studio</Badge>
+        <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-2">
+                <Sparkles className="w-6 h-6 text-indigo-400" />
+                <span className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">MayaGen</span>
+            </div>
+             {user ? (
+                 <div className="flex items-center gap-2">
+                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-neutral-800 text-xs">
+                        <User className="w-3 h-3 text-indigo-400" />
+                        <span className="text-neutral-300 max-w-[80px] truncate">{user.username}</span>
+                     </div>
+                     <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-500 hover:text-red-400" onClick={logout} title="Sign Out">
+                         <LogOut className="w-4 h-4" />
+                     </Button>
+                 </div>
+             ) : (
+                 <Link href="/login">
+                     <Button size="sm" variant="outline" className="h-8 text-xs border-indigo-500/50 text-indigo-400 hover:bg-indigo-950">
+                         Sign In
+                     </Button>
+                 </Link>
+             )}
         </div>
 
-        <div className="space-y-6">
+        {/* Auth Barrier for non-logged in users */}
+        {!user && (
+            <div className="mb-6 p-4 rounded-lg bg-indigo-950/30 border border-indigo-500/30 text-center">
+                 <Lock className="w-5 h-5 mx-auto text-indigo-400 mb-2" />
+                 <h3 className="text-sm font-medium text-indigo-200">Studio Locked</h3>
+                 <p className="text-xs text-indigo-300/70 mb-3">Sign in to start creating</p>
+                 <Link href="/login">
+                    <Button size="sm" className="w-full bg-indigo-600 hover:bg-indigo-700">Login to Generate</Button>
+                 </Link>
+            </div>
+        )}
+
+        <div className={`space-y-6 ${!user ? 'opacity-50 pointer-events-none blur-[1px]' : ''}`}>
             
             {/* Prompt */}
             <div className="space-y-2">
@@ -234,9 +264,15 @@ export default function Home() {
                       {/* Overlay */}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
                           <div className="flex items-center justify-between">
-                              <Badge className="bg-white/10 backdrop-blur hover:bg-white/20 text-white border-none">
-                                  {img.category}
-                              </Badge>
+                              <div className="flex flex-col items-start gap-1">
+                                <Badge className="bg-white/10 backdrop-blur hover:bg-white/20 text-white border-none">
+                                    {img.category}
+                                </Badge>
+                                <span className="text-[10px] text-neutral-400 flex items-center gap-1">
+                                    <User className="w-3 h-3" />
+                                    {img.created_by || "Anonymous"}
+                                </span>
+                              </div>
                               <a 
                                   href={img.url} 
                                   target="_blank" 
