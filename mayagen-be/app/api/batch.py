@@ -21,6 +21,7 @@ from ..models import BatchJob, BatchJobStatus, User, Image, JobStatus
 from ..helpers import api_response_helper as responses
 from ..services.prompt_generator import generate_prompts, get_sample_prompts, estimate_unique_combinations, DEFAULT_VARIATIONS
 from . import deps
+from ..core import config
 
 router = APIRouter()
 

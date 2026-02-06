@@ -6,12 +6,14 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Download, Share2, Calendar, User, Hash, Layers, Cpu, FolderOpen, Image as ImageIcon, Clock, FileText, Maximize2, Copy, Check } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Share2, Calendar, User, Hash, Layers, Cpu, FolderOpen, Image as ImageIcon, Clock, FileText, Maximize2, Copy, Check, Globe, Lock } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
+import { useAuth } from "@/context/AuthContext";
 
 interface ImageDetail {
   id: number;
+  user_id: number;
   filename: string;
   url: string | null;
   prompt: string;
@@ -24,6 +26,7 @@ interface ImageDetail {
   updated_at: string;
   created_by: string;
   status: string;
+  is_public: boolean;
 }
 
 // Model Display Names
@@ -35,9 +38,11 @@ const MODEL_NAMES: Record<string, string> = {
 export default function ImageDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
   const [image, setImage] = useState<ImageDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [toggling, setToggling] = useState(false);
 
   useEffect(() => {
     const fetchImage = async () => {
@@ -50,7 +55,12 @@ export default function ImageDetailPage() {
         }
       } catch (err: any) {
         console.error("Error fetching image:", err);
-        toast.error(err.response?.data?.error || "Failed to load image details");
+        // If 403, might handle differently, but toast error works for now
+        if (err.response?.status === 403) {
+            toast.error("Access Denied: Private Image");
+        } else {
+            toast.error(err.response?.data?.error || "Failed to load image details");
+        }
       } finally {
         setLoading(false);
       }
@@ -89,6 +99,24 @@ export default function ImageDetailPage() {
     }
   };
 
+  const toggleVisibility = async () => {
+    if (!image || toggling) return;
+    setToggling(true);
+    try {
+      const newStatus = !image.is_public;
+      const res = await api.patch(`/images/${image.id}`, { is_public: newStatus });
+      if (res.data.success) {
+        setImage({ ...image, is_public: newStatus });
+        toast.success(newStatus ? "Image is now Public" : "Image is now Private");
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Failed to update visibility");
+    } finally {
+      setToggling(false);
+    }
+  };
+
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-950 text-white">
@@ -105,7 +133,7 @@ export default function ImageDetailPage() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-950 text-white gap-4">
         <ImageIcon className="w-16 h-16 text-neutral-700" />
         <h1 className="text-2xl font-bold text-red-400">Image Not Found</h1>
-        <p className="text-neutral-500">The image you're looking for doesn't exist or has been removed.</p>
+        <p className="text-neutral-500">The image you're looking for doesn't exist or has been removed (or is private).</p>
         <Button onClick={() => router.push("/")} variant="outline" className="mt-4">
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Gallery
         </Button>
@@ -114,6 +142,7 @@ export default function ImageDetailPage() {
   }
 
   const isProcessing = image.status === 'PENDING' || image.status === 'PROCESSING';
+  const isOwner = user && image && Number(user.id) === Number(image.user_id);
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100">
@@ -142,9 +171,24 @@ export default function ImageDetailPage() {
 
       <div className="flex flex-col lg:flex-row min-h-[calc(100vh-57px)] lg:h-[calc(100vh-57px)]">
         {/* Image Panel (Left) */}
-        <div className="flex-1 flex items-center justify-center p-6 lg:p-10 bg-neutral-900/30 relative overflow-hidden min-h-[50vh] lg:min-h-0">
+        <div className="flex-1 flex items-center justify-center bg-neutral-950 relative overflow-hidden min-h-[50vh] lg:min-h-0 group">
+          
+          {/* Backdrop Blur Effect */}
+          {image?.url && !isProcessing && (
+            <div className="absolute inset-0 z-0 pointer-events-none">
+              <Image
+                src={image.url}
+                alt="background-blur"
+                fill
+                className="object-cover opacity-20 blur-3xl scale-110 saturate-150"
+                unoptimized
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-neutral-950/80 via-transparent to-neutral-950/20" />
+            </div>
+          )}
+
           {isProcessing ? (
-            <div className="flex flex-col items-center justify-center gap-6 text-center animate-pulse">
+            <div className="relative z-10 flex flex-col items-center justify-center gap-6 text-center animate-pulse">
               <div className="relative">
                 <div className="w-32 h-32 rounded-full border-4 border-indigo-500/30 flex items-center justify-center">
                   <Loader2 className="w-16 h-16 text-indigo-500 animate-spin" />
@@ -158,27 +202,27 @@ export default function ImageDetailPage() {
               </div>
             </div>
           ) : image.url ? (
-            <div className="relative w-full h-full max-h-[80vh] flex items-center justify-center">
+            <div className="relative z-10 w-full h-full flex items-center justify-center p-0 transition-all duration-300">
               <Image
                 src={image.url}
                 alt={image.prompt}
                 width={image.width}
                 height={image.height}
-                className="object-contain max-w-full max-h-full rounded-lg shadow-2xl shadow-black/50"
+                className="object-contain max-w-full max-h-full shadow-2xl shadow-black/80"
                 priority
                 unoptimized
               />
               <Button
                 size="icon"
                 variant="ghost"
-                className="absolute top-2 right-2 bg-black/50 hover:bg-black/80 text-white"
+                className="absolute top-4 right-4 bg-black/50 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                 onClick={() => window.open(image.url!, '_blank')}
               >
-                <Maximize2 className="w-4 h-4" />
+                <Maximize2 className="w-5 h-5" />
               </Button>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-4 text-neutral-500">
+            <div className="relative z-10 flex flex-col items-center gap-4 text-neutral-500">
               <ImageIcon className="w-20 h-20 opacity-20" />
               <span>Image not available</span>
             </div>
@@ -242,6 +286,12 @@ export default function ImageDetailPage() {
                   {image.updated_at && (
                     <MetaItem icon={<Clock className="w-3.5 h-3.5" />} label="Updated" value={new Date(image.updated_at).toLocaleString()} />
                   )}
+                  {/* Visibility Status */}
+                  <MetaItem 
+                    icon={image.is_public ? <Globe className="w-3.5 h-3.5 text-neutral-400" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />} 
+                    label="Visibility" 
+                    value={image.is_public ? "Public" : "Private"} 
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -249,24 +299,49 @@ export default function ImageDetailPage() {
             <hr className="border-neutral-800" />
 
             {/* Actions */}
-            <div className="flex gap-3">
-              <Button
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
-                onClick={handleDownload}
-                disabled={isProcessing}
-              >
-                <Download className="mr-2 h-4 w-4" /> Download
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1 border-neutral-700 hover:bg-neutral-800 text-black hover:text-white"
-                onClick={() => {
-                  navigator.clipboard.writeText(window.location.href);
-                  toast.success("Link copied!");
-                }}
-              >
-                <Share2 className="mr-2 h-4 w-4" /> Share
-              </Button>
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                  onClick={handleDownload}
+                  disabled={isProcessing}
+                >
+                  <Download className="mr-2 h-4 w-4" /> Download
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 bg-transparent border-neutral-700 hover:bg-neutral-800 text-neutral-300 hover:text-white"
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.href);
+                    toast.success("Link copied!");
+                  }}
+                >
+                  <Share2 className="mr-2 h-4 w-4" /> Share
+                </Button>
+              </div>
+
+               {/* Owner Actions */}
+               {isOwner && (
+                 <Button
+                   variant="ghost"
+                   onClick={toggleVisibility}
+                   disabled={toggling}
+                   className={`w-full border transition-all ${
+                     image.is_public 
+                       ? "border-neutral-700 bg-black/20 hover:bg-neutral-800 text-neutral-400 hover:text-white" 
+                       : "border-amber-500/30 bg-amber-900/10 text-amber-500 hover:bg-amber-900/20"
+                   }`}
+                 >
+                   {toggling ? (
+                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                   ) : image.is_public ? (
+                     <Globe className="w-4 h-4 mr-2" />
+                   ) : (
+                     <Lock className="w-4 h-4 mr-2" />
+                   )}
+                   {image.is_public ? "Public Image (Visible to everyone)" : "Private Image (Only you can see this)"}
+                 </Button>
+               )}
             </div>
           </div>
         </aside>

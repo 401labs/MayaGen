@@ -1,6 +1,7 @@
 import os
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -249,6 +250,11 @@ async def get_image(
             
         img, user = row
         
+        # Access Control
+        if not img.is_public:
+            if not current_user or current_user.id != img.user_id:
+                return responses.api_error(status_code=403, message="Access Denied", error="This image is private and can only be viewed by its creator.")
+
         url = None
         if img.status == JobStatus.COMPLETED:
             safe_category = img.category.replace("\\", "/") if img.category else "uncategorized"
@@ -258,6 +264,7 @@ async def get_image(
             message="Image Detail Retrieved",
             data={
                 "id": img.id,
+                "user_id": img.user_id,
                 "filename": img.filename,
                 "category": img.category,
                 "url": url,
@@ -274,5 +281,42 @@ async def get_image(
         )
     except Exception as e:
         return responses.api_error(status_code=500, message="Failed to retrieve image", error=str(e))
+
+
+class ImageUpdate(BaseModel):
+    is_public: Optional[bool] = None
+
+@router.patch("/images/{image_id}")
+async def update_image(
+    image_id: int,
+    data: ImageUpdate,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """Update image details (e.g. visibility). Only owner can update."""
+    try:
+        statement = select(Image).where(Image.id == image_id)
+        result = await session.execute(statement)
+        img = result.scalars().first()
+        
+        if not img:
+            return responses.api_error(status_code=404, message="Not Found", error="Image not found")
+            
+        if img.user_id != current_user.id:
+            return responses.api_error(status_code=403, message="Access Denied", error="You can only update your own images")
+            
+        if data.is_public is not None:
+            img.is_public = data.is_public
+            
+        session.add(img)
+        await session.commit()
+        await session.refresh(img)
+        
+        return responses.api_success(
+            message="Image updated",
+            data={"id": img.id, "is_public": img.is_public}
+        )
+    except Exception as e:
+        return responses.api_error(status_code=500, message="Failed to update image", error=str(e))
 
 
