@@ -126,7 +126,7 @@ export default function BulkGeneratePage() {
             </div>
             
             <Link href="/bulk/history">
-              <Button variant="ghost" className="border border-white/10 bg-white/5 text-white hover:bg-white/10 h-10 px-6 text-sm transition-all duration-200 shadow-sm">
+              <Button variant="ghost" className="border border-neutral-700 bg-neutral-800/80 text-white hover:bg-neutral-700 hover:text-white h-10 px-6 text-sm transition-all duration-200 shadow-sm">
                 <History className="w-4 h-4 mr-2 text-indigo-400" />
                 View Batches
               </Button>

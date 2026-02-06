@@ -29,7 +29,7 @@ async def list_images(
     try:
         """Lists generated images. Public feed."""
         # TODO: This hardcoded URL needs to be dynamic or from config
-        base_url = "http://127.0.0.1:8000/images"
+        base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:8000") + "/images"
         
         # Calculate offset
         offset = (page - 1) * limit
@@ -115,7 +115,7 @@ async def get_my_images(
 ):
     """Get all images created by the current user (Private & Public)."""
     try:
-        base_url = "http://127.0.0.1:8000/images"
+        base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:8000") + "/images"
         
         offset = (page - 1) * limit
         
@@ -190,7 +190,7 @@ async def get_image(
 ):
     try:
         """Get a single image detail."""
-        base_url = "http://127.0.0.1:8000/images"
+        base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:8000") + "/images"
         
         # Query with User join
         statement = select(Image, User).where(Image.id == image_id).join(User, isouter=True)
@@ -236,7 +236,7 @@ async def get_recent_images(
 ):
     """Get recent COMPLETED images. If logged in, shows user's images. Else public."""
     try:
-        base_url = "http://127.0.0.1:8000/images"
+        base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:8000") + "/images"
         
         # Custom sort order: COMPLETED (1), PROCESSING (2), QUEUED (3), FAILED (4)
         # But for Recent Public Feed, we only want COMPLETED + PUBLIC

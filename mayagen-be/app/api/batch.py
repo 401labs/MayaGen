@@ -12,8 +12,9 @@ Endpoints:
 from typing import Optional, Dict, List, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlmodel import select
+from sqlmodel import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+import os
 
 from ..database import get_session
 from ..models import BatchJob, BatchJobStatus, User, Image, JobStatus
@@ -269,9 +270,11 @@ async def get_variation_presets(
 async def get_batch_images(
     batch_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(deps.get_current_user)
+    current_user: User = Depends(deps.get_current_user),
+    page: int = 1,
+    limit: int = 24
 ):
-    """Get all images for a specific batch job."""
+    """Get all images for a specific batch job with pagination."""
     try:
         # Verify batch belongs to user
         batch_stmt = select(BatchJob).where(
@@ -284,12 +287,21 @@ async def get_batch_images(
         if not batch:
             return responses.api_error(status_code=404, message="Not Found", error="Batch job not found")
 
-        # Get all images for this batch
-        base_url = "http://127.0.0.1:8000/images"
+        # Get total count
+        count_stmt = select(func.count()).where(Image.batch_job_id == batch_id)
+        total_result = await session.execute(count_stmt)
+        total = total_result.scalar_one()
+
+        # Get paginated images
+        base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:8000") + "/images"
+        offset = (page - 1) * limit
+        
         statement = (
             select(Image)
             .where(Image.batch_job_id == batch_id)
             .order_by(Image.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
         results = await session.execute(statement)
         images = results.scalars().all()
@@ -299,6 +311,9 @@ async def get_batch_images(
             url = None
             if img.status == JobStatus.COMPLETED:
                 safe_category = img.category.replace("\\", "/") if img.category else "uncategorized"
+                # Check absolute path logic? 
+                # Assuming api/images/ is generic, here we point to static or api route
+                # Current system seems to assume static serving or api route access
                 url = f"{base_url}/{safe_category}/{img.filename}"
 
             image_list.append({
@@ -318,10 +333,82 @@ async def get_batch_images(
                 "batch_id": batch_id,
                 "batch_name": batch.name,
                 "images": image_list,
-                "total": len(image_list)
+                "meta": {
+                    "total": total,
+                    "page": page,
+                    "limit": limit,
+                    "total_pages": (total + limit - 1) // limit
+                }
             }
         )
     except Exception as e:
         import traceback
         traceback.print_exc()
         return responses.api_error(status_code=500, message="Failed to get batch images", error=str(e))
+
+
+@router.get("/batch/{batch_id}/download")
+async def download_batch_images(
+    batch_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """Download all images in a batch as a ZIP file."""
+    try:
+        import zipfile
+        import io
+        from fastapi import Response
+        
+        # Verify batch
+        batch_stmt = select(BatchJob).where(
+            BatchJob.id == batch_id,
+            BatchJob.user_id == current_user.id
+        )
+        batch_result = await session.execute(batch_stmt)
+        batch = batch_result.scalar_one_or_none()
+        
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch not found")
+
+        # Get completed images
+        stmt = select(Image).where(
+            Image.batch_job_id == batch_id,
+            Image.status == JobStatus.COMPLETED
+        )
+        result = await session.execute(stmt)
+        images = result.scalars().all()
+        
+        if not images:
+             raise HTTPException(status_code=404, detail="No completed images to download")
+
+        # Create ZIP in memory
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for img in images:
+                # Construct file path
+                # Ideally this should use a config for base path
+                base_path = "synthetic_dataset" 
+                file_path = os.path.join(base_path, img.category, img.filename)
+                
+                if os.path.exists(file_path):
+                    zip_file.write(file_path, img.filename)
+        
+        zip_buffer.seek(0)
+        
+        # Filename: _MAYAGEN_{CATEGORY}_{RANDOMID}.zip
+        safe_cat = batch.category.replace("/", "_").replace("\\", "_").upper()
+        filename = f"_MAYAGEN_{safe_cat}_{batch.id}.zip"
+        
+        return Response(
+            content=zip_buffer.getvalue(),
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        # If it's an HTTP exception re-raise it, otherwise generic 500
+        if isinstance(e, HTTPException):
+            raise e
+        return responses.api_error(status_code=500, message="Download failed", error=str(e))

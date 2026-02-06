@@ -1,14 +1,17 @@
 'use client';
 
+import Image from 'next/image';
+
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, RefreshCw, Image as ImageIcon, Grid, LayoutGrid, CheckCircle, Clock, AlertCircle, Layers, Cpu, Calendar, FolderOpen, Maximize } from "lucide-react";
+import { Loader2, ArrowLeft, RefreshCw, Image as ImageIcon, Grid, LayoutGrid, CheckCircle, Clock, AlertCircle, Layers, Cpu, Calendar, FolderOpen, Maximize, Download } from "lucide-react";
 import Link from 'next/link';
 import { toast } from "sonner";
+import { PaginationControl } from "@/components/ui/pagination-control";
 
 interface BatchJob {
   id: number;
@@ -41,7 +44,6 @@ interface BatchImage {
 const MODEL_NAMES: Record<string, string> = {
   sd15: "DreamShaper 8",
   lcm: "SD 1.5 Base",
-  flux: "Flux",
 };
 
 export default function BatchViewPage() {
@@ -52,19 +54,24 @@ export default function BatchViewPage() {
   const [images, setImages] = useState<BatchImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('masonry');
+  
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const LIMIT = 24;
 
   useEffect(() => {
     if (user && batchId) {
-      fetchBatchData();
+      fetchBatchData(page);
     }
-  }, [user, batchId]);
+  }, [user, batchId, page]);
 
-  const fetchBatchData = async () => {
+  const fetchBatchData = async (pageNum: number = 1) => {
     setLoading(true);
     try {
       const [batchRes, imagesRes] = await Promise.all([
         api.get(`/batch/${batchId}`),
-        api.get(`/batch/${batchId}/images`)
+        api.get(`/batch/${batchId}/images?page=${pageNum}&limit=${LIMIT}`)
       ]);
 
       if (batchRes.data.success) {
@@ -72,22 +79,53 @@ export default function BatchViewPage() {
       }
 
       if (imagesRes.data.success) {
-        const sortedImages = imagesRes.data.data.images.sort((a: BatchImage, b: BatchImage) => {
-          const aCompleted = a.status?.toUpperCase() === 'COMPLETED';
-          const bCompleted = b.status?.toUpperCase() === 'COMPLETED';
-
-          if (aCompleted && !bCompleted) return -1;
-          if (!aCompleted && bCompleted) return 1;
-
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        });
-        setImages(sortedImages);
+        setImages(imagesRes.data.data.images);
+        if (imagesRes.data.data.meta) {
+          setTotalPages(imagesRes.data.data.meta.total_pages);
+          // Don't override page state here to avoid loops, unless needed
+        }
       }
     } catch (e: any) {
       console.error('Failed to fetch batch data', e);
       toast.error('Failed to load batch');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      // Trigger download
+      // Note: This expects browser compliance with Content-Disposition
+      // We can open in new tab or use blob download
+      const downloadUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/batch/${batchId}/download`;
+      // Check if user has token? The generic link might fail auth if headers not sent.
+      // Better to fetch blob with api client.
+      
+      toast.info("Preparing download...");
+      const res = await api.get(`/batch/${batchId}/download`, { responseType: 'blob' });
+      
+      // Create blob link
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Extract filename from header or fallback
+      const contentDisposition = res.headers['content-disposition'];
+      let filename = `batch_${batchId}.zip`;
+      if (contentDisposition) {
+          const match = contentDisposition.match(/filename=(.+)/);
+          if (match && match[1]) filename = match[1];
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success("Download started");
+    } catch (e) {
+      console.error("Download failed", e);
+      toast.error("Failed to download batch");
     }
   };
 
@@ -213,14 +251,24 @@ export default function BatchViewPage() {
                   <Grid className="w-4 h-4" />
                 </Button>
               </div>
+              
               <Button
                 variant="outline"
                 size="sm"
-                onClick={fetchBatchData}
-                className="border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-white transition-all"
+                onClick={() => fetchBatchData(page)}
+                className="border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-white transition-all h-9 bg-black/50"
               >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Refresh
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+
+              <Button 
+                onClick={handleDownload}
+                size="sm"
+                className="bg-indigo-600 hover:bg-indigo-500 h-9"
+                disabled={!batch || batch.generated_count === 0}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download Zip
               </Button>
             </div>
           </div>
@@ -316,6 +364,15 @@ export default function BatchViewPage() {
             ))}
           </div>
         )}
+
+        {/* Pagination Controls */}
+        {!loading && images.length > 0 && (
+          <PaginationControl
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
+        )}
       </main>
     </div>
   );
@@ -334,7 +391,7 @@ function GalleryCard({ image, isSquare, index, batchStatus }: { image: BatchImag
   const isFailed = effectiveStatus === 'FAILED';
   const isCancelled = effectiveStatus === 'CANCELLED';
 
-  const isCompleted = status === 'COMPLETED';
+  const isCompleted = effectiveStatus === 'COMPLETED';
 
   // Force square aspect ratio for placeholders as requested
   // isSquare prop might be false (masonry), but we want placeholders to be square?
@@ -382,12 +439,19 @@ function GalleryCard({ image, isSquare, index, batchStatus }: { image: BatchImag
           <span className="text-sm text-neutral-500">{isFailed ? 'Generation Failed' : 'Loading...'}</span>
         </div>
       ) : (
-        <img
-          src={image.url}
-          alt={image.filename}
-          className={`w-full ${isSquare ? 'aspect-square object-cover' : 'h-auto'} block`}
-          loading="lazy"
-        />
+
+        <div className={`relative w-full ${isSquare ? 'aspect-square' : 'h-auto'}`}>
+          <Image
+            src={image.url}
+            alt={image.filename}
+            fill={isSquare}
+            width={!isSquare ? 512 : undefined}
+            height={!isSquare ? 512 : undefined}
+            className="object-cover"
+            sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+            unoptimized
+          />
+        </div>
       )}
 
       {/* Hover Overlay */}

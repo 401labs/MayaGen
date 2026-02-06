@@ -30,7 +30,6 @@ interface ImageDetail {
 const MODEL_NAMES: Record<string, string> = {
   sd15: "DreamShaper 8",
   lcm: "SD 1.5 Base (LCM)",
-  flux: "Flux",
 };
 
 export default function ImageDetailPage() {

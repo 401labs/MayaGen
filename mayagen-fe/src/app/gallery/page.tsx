@@ -30,7 +30,6 @@ interface GalleryImage {
 const MODEL_NAMES: Record<string, string> = {
   sd15: "DreamShaper 8",
   lcm: "SD 1.5 Base",
-  flux: "Flux",
 };
 
 export default function GalleryPage() {
@@ -153,7 +152,7 @@ export default function GalleryPage() {
                 <SelectItem value="all">All Models</SelectItem>
                 <SelectItem value="sd15">DreamShaper 8</SelectItem>
                 <SelectItem value="lcm">SD 1.5 Base</SelectItem>
-                <SelectItem value="flux">Flux</SelectItem>
+
               </SelectContent>
             </Select>
 

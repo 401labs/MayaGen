@@ -17,6 +17,7 @@ import {
 } from "motion/react";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 
 export const FloatingDock = ({
   items,
@@ -68,13 +69,13 @@ const FloatingDockMobile = ({
                 }}
                 transition={{ delay: (items.length - 1 - idx) * 0.05 }}
               >
-                <a
+                <Link
                   href={item.href}
                   key={item.title}
                   className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 dark:bg-neutral-900"
                 >
                   <div className="h-4 w-4">{item.icon}</div>
-                </a>
+                </Link>
               </motion.div>
             ))}
           </motion.div>
@@ -104,8 +105,8 @@ const FloatingDockDesktop = ({
       onMouseLeave={() => mouseX.set(Infinity)}
       className={cn(
         "mx-auto hidden h-16 items-end gap-3 rounded-2xl px-4 pb-3 md:flex",
-        "bg-white/5 backdrop-blur-xl border border-white/10",
-        "shadow-[0_8px_32px_rgba(0,0,0,0.4)] shadow-black/20",
+        "bg-neutral-900/95 backdrop-blur-xl border border-neutral-700/50",
+        "shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)]",
         className,
       )}
     >
@@ -170,13 +171,13 @@ function IconContainer({
   const [hovered, setHovered] = useState(false);
 
   return (
-    <a href={href}>
+    <Link href={href}>
       <motion.div
         ref={ref}
         style={{ width, height }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        className="relative flex aspect-square items-center justify-center rounded-full bg-white/10 backdrop-blur-sm border border-white/10 hover:bg-white/20 hover:border-white/20 transition-colors"
+        className="relative flex aspect-square items-center justify-center rounded-full bg-neutral-800/80 backdrop-blur-sm border border-neutral-600/30 hover:bg-neutral-700/80 hover:border-neutral-500/40 transition-colors"
       >
         <AnimatePresence>
           {hovered && (
@@ -197,6 +198,6 @@ function IconContainer({
           {icon}
         </motion.div>
       </motion.div>
-    </a>
+    </Link>
   );
 }

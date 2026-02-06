@@ -24,7 +24,6 @@ interface RecentImage {
 const MODEL_DISPLAY: Record<string, string> = {
   sd15: "DreamShaper 8",
   lcm: "SD 1.5 Base",
-  flux: "Flux",
 };
 
 export default function Home() {
@@ -278,7 +277,7 @@ export default function Home() {
                       </SelectTrigger>
                       <SelectContent className="bg-neutral-900 border-neutral-700 text-neutral-200">
                         <SelectItem value="comfyui">ComfyUI</SelectItem>
-                        <SelectItem value="mock">Mock</SelectItem>
+
                       </SelectContent>
                     </Select>
                   </div>
