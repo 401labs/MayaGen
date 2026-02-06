@@ -37,6 +37,7 @@ class BatchJobCreate(BaseModel):
     provider: str = "comfyui"
     width: int = 512
     height: int = 512
+    is_public: bool = True
 
 
 class BatchJobPreviewRequest(BaseModel):
@@ -67,7 +68,8 @@ async def create_batch_job(
             width=data.width,
             height=data.height,
             user_id=current_user.id,
-            status=BatchJobStatus.QUEUED
+            status=BatchJobStatus.QUEUED,
+            is_public=data.is_public
         )
         
         session.add(batch)

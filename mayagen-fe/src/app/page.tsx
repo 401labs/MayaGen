@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Loader2, Sparkles, Send, Image as ImageIcon, Zap, Layers, Settings2, ChevronDown, ArrowRight, Lock, Wand2, Database, Cpu, FolderOpen } from "lucide-react";
+import { Loader2, Sparkles, Send, Image as ImageIcon, Zap, Layers, Settings2, ChevronDown, ArrowRight, Lock, Wand2, Database, Cpu, FolderOpen, Globe } from "lucide-react";
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from "sonner";
@@ -32,6 +32,7 @@ export default function Home() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const [prompt, setPrompt] = useState('');
+  const [isPublic, setIsPublic] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [recentImages, setRecentImages] = useState<RecentImage[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
@@ -126,7 +127,8 @@ export default function Home() {
         height,
         provider,
         model,
-        category: category || "uncategorized"
+        category: category || "uncategorized",
+        is_public: isPublic
       }));
       toast.info("Please log in to generate images");
       router.push("/login");
@@ -138,12 +140,12 @@ export default function Home() {
     try {
       const response = await api.post('/generate', {
         prompt: prompt.trim(),
-        filename_prefix: "mayagen_ui",
         width,
         height,
         provider,
         model,
-        category: category || "uncategorized"
+        category: category || "uncategorized",
+        is_public: isPublic
       });
 
       if (response.data.success) {
@@ -239,6 +241,30 @@ export default function Home() {
                   <Settings2 className="w-4 h-4 mr-1.5" />
                   Settings
                   <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+                </Button>
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`h-8 px-3 text-xs transition-colors ${
+                    isPublic 
+                      ? "text-neutral-400 hover:text-white hover:bg-neutral-800" 
+                      : "text-amber-400 bg-amber-400/10 hover:bg-amber-400/20 hover:text-amber-300"
+                  }`}
+                  onClick={() => setIsPublic(!isPublic)}
+                  title={isPublic ? "Public Image" : "Private Image"}
+                >
+                  {isPublic ? (
+                    <>
+                      <Globe className="w-3.5 h-3.5 mr-1.5" />
+                      Public
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-3.5 h-3.5 mr-1.5" />
+                      Private
+                    </>
+                  )}
                 </Button>
                 
                 <div className="hidden sm:flex items-center gap-2 text-xs text-neutral-500">

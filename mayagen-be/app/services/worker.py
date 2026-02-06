@@ -154,7 +154,8 @@ async def process_batch_jobs():
                     height=batch.height,
                     user_id=batch.user_id,
                     batch_job_id=batch.id,
-                    status=JobStatus.QUEUED
+                    status=JobStatus.QUEUED,
+                    is_public=batch.is_public
                 )
                 session.add(image)
             

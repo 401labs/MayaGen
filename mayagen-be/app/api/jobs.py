@@ -18,7 +18,8 @@ class GenerateRequest(BaseModel):
     height: int = 512 
     provider: str = "comfyui" 
     model: str = "sd15" 
-    category: str = "uncategorized" 
+    category: str = "uncategorized"
+    is_public: bool = True
 
 @router.post("/generate")
 async def generate_image(
@@ -45,7 +46,8 @@ async def generate_image(
             provider=req.provider,
             category=safe_category,
             user_id=current_user.id,
-            status=JobStatus.QUEUED 
+            status=JobStatus.QUEUED,
+            is_public=req.is_public
         )
         session.add(db_image)
         await session.commit()

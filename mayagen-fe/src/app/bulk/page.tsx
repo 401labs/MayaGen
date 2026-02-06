@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Layers, Eye, Play, History } from "lucide-react";
+import { Loader2, Layers, Eye, Play, History, Globe, Lock } from "lucide-react";
 import Link from 'next/link';
 import { toast } from "sonner";
 
@@ -28,6 +28,7 @@ export default function BulkGeneratePage() {
   const [targetSubject, setTargetSubject] = useState('');
   const [totalImages, setTotalImages] = useState(100);
   const [model, setModel] = useState('sd15');
+  const [isPublic, setIsPublic] = useState(true);
   
   // Variations - all selected by default
   const [colors, setColors] = useState<string[]>([...PRESETS.colors]);
@@ -76,7 +77,8 @@ export default function BulkGeneratePage() {
         variations: buildVariations(),
         model,
         width: 512,
-        height: 512
+        height: 512,
+        is_public: isPublic
       });
       if (res.data.success) {
         toast.success(`Batch created! ID: ${res.data.data.id}`);
@@ -196,6 +198,29 @@ export default function BulkGeneratePage() {
         
         {/* Actions */}
         <div className="flex gap-3 pt-2">
+          {/* Public/Private Toggle */}
+          <Button
+            variant="ghost"
+            className={`border border-neutral-700 h-10 px-4 text-sm transition-colors ${
+              isPublic 
+                ? "bg-neutral-800 hover:bg-neutral-700 text-neutral-300" 
+                : "bg-amber-900/20 border-amber-500/30 text-amber-500 hover:bg-amber-900/30"
+            }`}
+            onClick={() => setIsPublic(!isPublic)}
+          >
+            {isPublic ? (
+              <>
+                <Globe className="w-4 h-4 mr-2" />
+                Public
+              </>
+            ) : (
+              <>
+                <Lock className="w-4 h-4 mr-2" />
+                Private
+              </>
+            )}
+          </Button>
+
           <Button variant="outline" onClick={generatePreview} disabled={isPreviewing || !targetSubject.trim()} className="border-neutral-700 h-10 px-6 text-sm hover:bg-neutral-800 text-neutral-300 hover:text-white">
             {isPreviewing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Eye className="w-4 h-4 mr-2" />}
             Preview
