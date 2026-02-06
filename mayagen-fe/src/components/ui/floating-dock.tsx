@@ -72,9 +72,18 @@ const FloatingDockMobile = ({
                 <Link
                   href={item.href}
                   key={item.title}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 dark:bg-neutral-900"
+                  className="flex items-center justify-end gap-3"
                 >
-                  <div className="h-4 w-4">{item.icon}</div>
+                  <motion.span 
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="whitespace-nowrap text-sm font-medium text-neutral-100 bg-neutral-900 px-3 py-1.5 rounded-full border border-neutral-800 shadow-md"
+                  >
+                    {item.title}
+                  </motion.span>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-900 border border-neutral-800 shadow-md shrink-0">
+                    <div className="h-4 w-4 text-neutral-200">{item.icon}</div>
+                  </div>
                 </Link>
               </motion.div>
             ))}

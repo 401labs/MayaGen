@@ -74,13 +74,23 @@ export function AppDock() {
 
   const items = [...baseItems, ...authItems];
 
+  // On mobile, FloatingDock handles its own positioning via mobileClassName.
+  // We only need the wrapper for desktop centering.
+  // But wait, the wrapper is `fixed bottom-6 left-1/2`. This applies to ALL screens.
+  // This likely conflicts with `mobileClassName="fixed bottom-4 right-4"`.
+  // The wrapper forces center, the internal mobile component forces bottom-right.
+  // We should hide the wrapper styles on mobile or ensure they don't apply.
+  
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-      <FloatingDock
-        items={items}
-        desktopClassName=""
-        mobileClassName="fixed bottom-4 right-4"
-      />
+    <div className="md:fixed md:bottom-6 md:left-1/2 md:-translate-x-1/2 md:z-50 pointer-events-none">
+       {/* pointer-events-none on wrapper so it doesn't block clicks, but children need events-auto */}
+       <div className="pointer-events-auto">
+        <FloatingDock
+            items={items}
+            desktopClassName=""
+            mobileClassName="fixed bottom-4 right-4 z-50 translate-x-0" 
+        />
+      </div>
     </div>
   );
 }

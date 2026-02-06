@@ -152,7 +152,7 @@ export default function ImageDetailPage() {
   const isOwner = user && image && Number(user.id) === Number(image.user_id);
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100">
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 pb-32">
       {/* Top Bar */}
       <header className="sticky top-0 z-50 backdrop-blur-lg bg-neutral-950/80 border-b border-neutral-800 px-6 py-3 flex items-center justify-between">
         <Button
