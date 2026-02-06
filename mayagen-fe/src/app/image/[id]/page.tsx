@@ -46,7 +46,7 @@ export default function ImageDetailPage() {
         if (res.data.success) {
           setImage(res.data.data);
         } else {
-             toast.error(res.data.message || "Failed to load image");
+          toast.error(res.data.message || "Failed to load image");
         }
       } catch (err: any) {
         console.error("Error fetching image:", err);
@@ -119,11 +119,11 @@ export default function ImageDetailPage() {
     <div className="min-h-screen bg-neutral-950 text-neutral-100">
       {/* Top Bar */}
       <header className="sticky top-0 z-50 backdrop-blur-lg bg-neutral-950/80 border-b border-neutral-800 px-6 py-3 flex items-center justify-between">
-        <Button 
-            onClick={() => router.push("/")} 
-            variant="ghost" 
-            size="sm"
-            className="hover:bg-neutral-900 text-neutral-400 hover:text-white"
+        <Button
+          onClick={() => router.push("/")}
+          variant="ghost"
+          size="sm"
+          className="hover:bg-neutral-900 text-neutral-400 hover:text-white"
         >
           <ArrowLeft className="mr-2 h-4 w-4" /> Gallery
         </Button>
@@ -131,19 +131,18 @@ export default function ImageDetailPage() {
           <Badge variant="outline" className="text-neutral-400 border-neutral-700 font-mono">
             <Hash className="w-3 h-3 mr-1" /> {image.id}
           </Badge>
-          <Badge className={`${
-              image.status === 'COMPLETED' ? 'bg-green-900/30 text-green-400 border-green-700/50' : 
-              image.status === 'FAILED' ? 'bg-red-900/30 text-red-400 border-red-700/50' : 
+          <Badge className={`${image.status === 'COMPLETED' ? 'bg-green-900/30 text-green-400 border-green-700/50' :
+            image.status === 'FAILED' ? 'bg-red-900/30 text-red-400 border-red-700/50' :
               'bg-yellow-900/30 text-yellow-400 border-yellow-700/50'
-          } capitalize`}>
-              {image.status.toLowerCase()}
+            } capitalize`}>
+            {image.status.toLowerCase()}
           </Badge>
         </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row h-[calc(100vh-57px)]">
+      <div className="flex flex-col lg:flex-row min-h-[calc(100vh-57px)] lg:h-[calc(100vh-57px)]">
         {/* Image Panel (Left) */}
-        <div className="flex-1 flex items-center justify-center p-6 lg:p-10 bg-neutral-900/30 relative overflow-hidden">
+        <div className="flex-1 flex items-center justify-center p-6 lg:p-10 bg-neutral-900/30 relative overflow-hidden min-h-[50vh] lg:min-h-0">
           {isProcessing ? (
             <div className="flex flex-col items-center justify-center gap-6 text-center animate-pulse">
               <div className="relative">
@@ -160,18 +159,18 @@ export default function ImageDetailPage() {
             </div>
           ) : image.url ? (
             <div className="relative w-full h-full max-h-[80vh] flex items-center justify-center">
-              <Image 
-                src={image.url} 
-                alt={image.prompt} 
+              <Image
+                src={image.url}
+                alt={image.prompt}
                 width={image.width}
                 height={image.height}
                 className="object-contain max-w-full max-h-full rounded-lg shadow-2xl shadow-black/50"
                 priority
                 unoptimized
               />
-              <Button 
-                size="icon" 
-                variant="ghost" 
+              <Button
+                size="icon"
+                variant="ghost"
                 className="absolute top-2 right-2 bg-black/50 hover:bg-black/80 text-white"
                 onClick={() => window.open(image.url!, '_blank')}
               >
@@ -187,9 +186,9 @@ export default function ImageDetailPage() {
         </div>
 
         {/* Details Panel (Right) */}
-        <aside className="w-full lg:w-[420px] flex-shrink-0 border-l border-neutral-800 bg-neutral-900/50 overflow-y-auto">
+        <aside className="w-full lg:w-[420px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-neutral-800 bg-neutral-900/50 lg:overflow-y-auto">
           <div className="p-6 space-y-6">
-            
+
             {/* Prompt Section */}
             <Card className="bg-neutral-800/50 border-neutral-700">
               <CardHeader className="pb-2">
@@ -197,7 +196,7 @@ export default function ImageDetailPage() {
                   <CardTitle className="text-base flex items-center gap-2 text-neutral-300">
                     <FileText className="w-4 h-4" /> Prompt
                   </CardTitle>
-                  <Button variant="ghost" size="sm" onClick={copyPrompt} className="h-7 text-xs text-neutral-500 hover:text-white">
+                  <Button variant="ghost" size="sm" onClick={copyPrompt} className="h-7 text-xs text-neutral-500 hover:text-white hover:bg-neutral-700/50">
                     {copied ? <Check className="w-3 h-3 mr-1 text-green-400" /> : <Copy className="w-3 h-3 mr-1" />}
                     {copied ? "Copied" : "Copy"}
                   </Button>
@@ -251,16 +250,16 @@ export default function ImageDetailPage() {
 
             {/* Actions */}
             <div className="flex gap-3">
-              <Button 
+              <Button
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
                 onClick={handleDownload}
                 disabled={isProcessing}
               >
                 <Download className="mr-2 h-4 w-4" /> Download
               </Button>
-              <Button 
-                variant="outline" 
-                className="flex-1 border-neutral-700 hover:bg-neutral-800 text-neutral-300"
+              <Button
+                variant="outline"
+                className="flex-1 border-neutral-700 hover:bg-neutral-800 text-black hover:text-white"
                 onClick={() => {
                   navigator.clipboard.writeText(window.location.href);
                   toast.success("Link copied!");
