@@ -91,7 +91,7 @@ export default function GalleryPage() {
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 pb-24">
       {/* Header */}
-      <header className="sticky top-0 z-40 backdrop-blur-lg bg-neutral-950/80 border-b border-neutral-800">
+      <header className="z-40 backdrop-blur-lg bg-neutral-950/80 border-b border-neutral-800">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -102,7 +102,7 @@ export default function GalleryPage() {
               </Badge>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex w-full md:w-auto items-center justify-between gap-4 md:gap-2">
               <Button variant="outline" size="sm" onClick={() => fetchGallery(page)} className="border-neutral-800 hover:bg-neutral-800 text-neutral-400">
                 <RefreshCw className="w-4 h-4" />
               </Button>
@@ -161,7 +161,7 @@ export default function GalleryPage() {
             </Select>
 
             {/* View Toggle */}
-            <div className="flex items-center gap-1 bg-neutral-900 rounded-lg p-1 border border-neutral-800 ml-auto md:ml-0">
+            <div className="hidden md:flex items-center gap-1 bg-neutral-900 rounded-lg p-1 border border-neutral-800 ml-auto md:ml-0">
               <Button
                 variant="ghost"
                 size="icon"
