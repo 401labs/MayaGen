@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -51,11 +51,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include Routers
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
-app.include_router(images.router, tags=["images"])
-app.include_router(jobs.router, tags=["jobs"])
-app.include_router(batch.router, tags=["batch"])
+# Create versioned API router
+api_v1 = APIRouter(prefix="/api/v1")
+api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_v1.include_router(images.router, tags=["images"])
+api_v1.include_router(jobs.router, tags=["jobs"])
+api_v1.include_router(batch.router, tags=["batch"])
+
+# Include versioned router in app
+app.include_router(api_v1)
 
 # Mount static files
 app.mount("/images", StaticFiles(directory=config.OUTPUT_FOLDER), name="images")

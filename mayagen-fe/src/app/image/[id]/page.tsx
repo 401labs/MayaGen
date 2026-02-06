@@ -42,7 +42,7 @@ export default function ImageDetailPage() {
   useEffect(() => {
     const fetchImage = async () => {
       try {
-        const res = await api.get(`/api/images/${params.id}`);
+        const res = await api.get(`/images/${params.id}`);
         if (res.data.success) {
           setImage(res.data.data);
         } else {
