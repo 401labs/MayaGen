@@ -237,19 +237,20 @@ export default function BatchViewPage() {
               <div className="flex items-center gap-1 bg-neutral-900 rounded-xl p-1.5 border border-neutral-800">
                 <Button
                   variant="ghost"
-                  size="icon"
-                  className={`h-9 w-9 rounded-lg ${viewMode === 'masonry' ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-white'}`}
-                  onClick={() => setViewMode('masonry')}
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-9 w-9 rounded-lg ${viewMode === 'grid' ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-white'}`}
+                  size="sm"
+                  className={`h-9 w-9 p-0 ${viewMode === 'grid' ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-white'}`}
                   onClick={() => setViewMode('grid')}
                 >
                   <Grid className="w-4 h-4" />
+                </Button>
+                <div className="w-px h-4 bg-neutral-800" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`h-9 w-9 p-0 ${viewMode === 'masonry' ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-white'}`}
+                  onClick={() => setViewMode('masonry')}
+                >
+                  <LayoutGrid className="w-4 h-4" />
                 </Button>
               </div>
               
