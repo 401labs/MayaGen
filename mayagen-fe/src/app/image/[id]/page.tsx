@@ -130,12 +130,19 @@ export default function ImageDetailPage() {
 
   if (!image) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-950 text-white gap-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-950 text-white gap-4 px-6 text-center">
         <ImageIcon className="w-16 h-16 text-neutral-700" />
-        <h1 className="text-2xl font-bold text-red-400">Image Not Found</h1>
-        <p className="text-neutral-500">The image you're looking for doesn't exist or has been removed (or is private).</p>
-        <Button onClick={() => router.push("/")} variant="outline" className="mt-4">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Gallery
+        <h1 className="text-2xl font-bold text-red-500">Image Not Found</h1>
+        <p className="text-neutral-500 max-w-sm">The image you're looking for doesn't exist, has been removed, or is private.</p>
+        <Button onClick={() => {
+          const searchParams = new URLSearchParams(window.location.search);
+          const from = searchParams.get('from');
+          const batchId = searchParams.get('batchId');
+          if (from === 'batch' && batchId) router.push(`/bulk/view/${batchId}`);
+          else router.push("/");
+        }} variant="outline" className="mt-4 border-neutral-700 hover:bg-neutral-800 text-neutral-300 hover:text-white">
+          <ArrowLeft className="mr-2 h-4 w-4" /> 
+          <span className="text-neutral-200">Go Back</span>
         </Button>
       </div>
     );
@@ -149,12 +156,24 @@ export default function ImageDetailPage() {
       {/* Top Bar */}
       <header className="sticky top-0 z-50 backdrop-blur-lg bg-neutral-950/80 border-b border-neutral-800 px-6 py-3 flex items-center justify-between">
         <Button
-          onClick={() => router.push("/")}
+          onClick={() => {
+            const searchParams = new URLSearchParams(window.location.search);
+            const from = searchParams.get('from');
+            const batchId = searchParams.get('batchId');
+            
+            if (from === 'batch' && batchId) {
+              router.push(`/bulk/view/${batchId}`);
+            } else {
+              router.push("/");
+            }
+          }}
           variant="ghost"
           size="sm"
           className="hover:bg-neutral-900 text-neutral-400 hover:text-white"
         >
-          <ArrowLeft className="mr-2 h-4 w-4" /> Gallery
+          <ArrowLeft className="mr-2 h-4 w-4" /> 
+          {/* Dynamic Label is tricky with CSR without hydration mismatch, defaulting to "Back" is safer or use state */}
+          Back
         </Button>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-neutral-400 border-neutral-700 font-mono">

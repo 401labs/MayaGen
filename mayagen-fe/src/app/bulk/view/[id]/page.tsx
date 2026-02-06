@@ -205,18 +205,19 @@ export default function BatchViewPage() {
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-neutral-950/80 border-b border-neutral-800/50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           {/* Top Row */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
+          {/* Top Row */}
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-4 w-full md:w-auto">
               <Link
                 href="/bulk/history"
                 className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 hover:border-neutral-700 transition-all hover:scale-105"
               >
                 <ArrowLeft className="w-5 h-5 text-neutral-300" />
               </Link>
-              <div>
-                <div className="flex items-center gap-3">
+              <div className="flex-1 md:flex-none">
+                <div className="flex flex-wrap items-center gap-3">
                   {getStatusIcon(batch.status)}
-                  <h1 className="text-xl font-semibold text-white">{batch.name}</h1>
+                  <h1 className="text-xl font-semibold text-white line-clamp-1">{batch.name}</h1>
                   <Badge
                     className={`capitalize ${
                       batch.status === 'completed' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
@@ -228,11 +229,11 @@ export default function BatchViewPage() {
                     {batch.status}
                   </Badge>
                 </div>
-                <p className="text-neutral-400 mt-1">{batch.target_subject}</p>
+                <p className="text-neutral-400 mt-1 text-sm line-clamp-1">{batch.target_subject}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between w-full md:w-auto gap-3">
               <div className="flex items-center gap-1 bg-neutral-900 rounded-xl p-1.5 border border-neutral-800">
                 <Button
                   variant="ghost"
@@ -252,52 +253,59 @@ export default function BatchViewPage() {
                 </Button>
               </div>
               
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fetchBatchData(page)}
-                className="border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-white transition-all h-9 bg-black/50"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchBatchData(page)}
+                  className="border-neutral-700 text-neutral-300 hover:bg-neutral-800 hover:text-white transition-all h-9 bg-black/50"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
 
-              <Button 
-                onClick={handleDownload}
-                size="sm"
-                className="bg-indigo-600 hover:bg-indigo-500 h-9"
-                disabled={!batch || batch.generated_count === 0}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Download Zip
-              </Button>
+                <Button 
+                  onClick={handleDownload}
+                  size="sm"
+                  className="bg-indigo-600 hover:bg-indigo-500 h-9"
+                  disabled={!batch || batch.generated_count === 0}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download
+                </Button>
+              </div>
             </div>
           </div>
+        </div>
+      </header>
 
+      {/* Gallery */}
+      <main className="max-w-7xl mx-auto px-4 md:px-6 py-6">
+        
           {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-neutral-900/50 border border-neutral-800/50">
-              <FolderOpen className="w-5 h-5 text-indigo-400" />
-              <div>
+              <FolderOpen className="w-5 h-5 text-indigo-400 flex-shrink-0" />
+              <div className="overflow-hidden">
                 <p className="text-xs text-neutral-500">Category</p>
-                <p className="text-sm font-medium text-white">{batch.category}</p>
+                <p className="text-sm font-medium text-white truncate">{batch.category}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 p-3 rounded-xl bg-neutral-900/50 border border-neutral-800/50">
-              <Cpu className="w-5 h-5 text-purple-400" />
-              <div>
+              <Cpu className="w-5 h-5 text-purple-400 flex-shrink-0" />
+              <div className="overflow-hidden">
                 <p className="text-xs text-neutral-500">Model</p>
-                <p className="text-sm font-medium text-white">{MODEL_NAMES[batch.model] || batch.model}</p>
+                <p className="text-sm font-medium text-white truncate">{MODEL_NAMES[batch.model] || batch.model}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 p-3 rounded-xl bg-neutral-900/50 border border-neutral-800/50">
-              <Maximize className="w-5 h-5 text-cyan-400" />
+              <Maximize className="w-5 h-5 text-cyan-400 flex-shrink-0" />
               <div>
                 <p className="text-xs text-neutral-500">Size</p>
                 <p className="text-sm font-medium text-white">{batch.width}x{batch.height}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 p-3 rounded-xl bg-neutral-900/50 border border-neutral-800/50">
-              <Calendar className="w-5 h-5 text-amber-400" />
+              <Calendar className="w-5 h-5 text-amber-400 flex-shrink-0" />
               <div>
                 <p className="text-xs text-neutral-500">Created</p>
                 <p className="text-sm font-medium text-white">{new Date(batch.created_at).toLocaleDateString()}</p>
@@ -306,9 +314,9 @@ export default function BatchViewPage() {
           </div>
 
           {/* Progress Section */}
-          <div className="p-4 rounded-xl bg-neutral-900/50 border border-neutral-800/50">
-            <div className="flex items-center justify-between text-sm mb-3">
-              <div className="flex items-center gap-4">
+          <div className="p-4 rounded-xl bg-neutral-900/50 border border-neutral-800/50 mb-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-sm mb-3 gap-2">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <span className="flex items-center gap-2 text-green-400">
                   <CheckCircle className="w-4 h-4" />
                   {completedCount} completed
@@ -338,13 +346,8 @@ export default function BatchViewPage() {
               />
             </div>
           </div>
-        </div>
-      </header>
-
-      {/* Gallery */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
         {images.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-[50vh] text-center">
+          <div className="flex flex-col items-center justify-center h-[50vh] text-center px-4">
             <div className="p-4 rounded-full bg-neutral-900 border border-neutral-800 mb-4">
               <ImageIcon className="w-12 h-12 text-neutral-600" />
             </div>
@@ -354,13 +357,13 @@ export default function BatchViewPage() {
         ) : viewMode === 'masonry' ? (
           <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
             {images.map((img, index) => (
-              <GalleryCard key={img.id} image={img} index={index} batchStatus={batch?.status} />
+              <GalleryCard key={img.id} image={img} index={index} batchStatus={batch?.status} batchId={batchId} />
             ))}
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {images.map((img, index) => (
-              <GalleryCard key={img.id} image={img} isSquare index={index} batchStatus={batch?.status} />
+              <GalleryCard key={img.id} image={img} isSquare index={index} batchStatus={batch?.status} batchId={batchId} />
             ))}
           </div>
         )}
@@ -378,7 +381,7 @@ export default function BatchViewPage() {
   );
 }
 
-function GalleryCard({ image, isSquare, index, batchStatus }: { image: BatchImage; isSquare?: boolean; index: number; batchStatus?: string }) {
+function GalleryCard({ image, isSquare, index, batchStatus, batchId }: { image: BatchImage; isSquare?: boolean; index: number; batchStatus?: string; batchId?: string }) {
   const rawStatus = image.status?.toUpperCase();
   
   // If batch is cancelled, treat pending/queued images as cancelled
@@ -396,14 +399,9 @@ function GalleryCard({ image, isSquare, index, batchStatus }: { image: BatchImag
   // Force square aspect ratio for placeholders as requested
   // isSquare prop might be false (masonry), but we want placeholders to be square?
   // User said: "make the placeholder images to be in 512 *512 resolution itself by default!"
-  // This implies they want the placeholders to take up square space even in masonry?
-  // Or just that the "grid" view (isSquare=true) should be default?
-  // Or that logic below using `aspect-[3/4]` is wrong.
-  // I'll change `aspect-[3/4]` to `aspect-square` globally for placeholders.
-
   return (
     <Link
-      href={`/image/${image.id}`}
+      href={`/image/${image.id}?from=batch&batchId=${batchId || ''}`}
       className={`relative group rounded-2xl overflow-hidden bg-neutral-900 border border-neutral-800 hover:border-indigo-500/50 transition-all duration-300 block hover:scale-[1.02] hover:shadow-xl hover:shadow-indigo-500/10 ${isSquare ? '' : 'break-inside-avoid mb-4'}`}
       style={{ animationDelay: `${index * 50}ms` }}
     >
@@ -442,7 +440,7 @@ function GalleryCard({ image, isSquare, index, batchStatus }: { image: BatchImag
 
         <div className={`relative w-full ${isSquare ? 'aspect-square' : 'h-auto'}`}>
           <Image
-            src={image.url}
+            src={image.url || '/placeholder.png'}
             alt={image.filename}
             fill={isSquare}
             width={!isSquare ? 512 : undefined}

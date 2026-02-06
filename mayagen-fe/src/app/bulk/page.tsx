@@ -120,7 +120,7 @@ export default function BulkGeneratePage() {
     <div className="min-h-screen bg-neutral-950 text-neutral-100 pb-24">
       {/* Header */}
       <header className="sticky top-0 z-40 backdrop-blur-lg bg-neutral-950/80 border-b border-neutral-800">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Layers className="w-6 h-6 text-amber-400" />
@@ -137,7 +137,7 @@ export default function BulkGeneratePage() {
         </div>
       </header>
       
-      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-6">
         {/* Config Row */}
         <div className="bg-neutral-900/50 border border-neutral-800 rounded-xl p-5 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -152,7 +152,7 @@ export default function BulkGeneratePage() {
             </div>
             
             <div className="space-y-1.5 md:col-span-2">
-              <label className="text-xs font-medium text-neutral-300 ml-1">Subject Prompt*</label>
+              <label className="text-xs font-medium text-neutral-300 ml-1">Object of Interest*</label>
               <Input placeholder="e.g. A cute scottish fold cat" value={targetSubject} onChange={(e) => setTargetSubject(e.target.value)} className="bg-neutral-950 border-neutral-800 h-10 text-sm focus-visible:ring-indigo-500/50 text-neutral-100 placeholder:text-neutral-600" />
             </div>
 
@@ -197,11 +197,11 @@ export default function BulkGeneratePage() {
         </div>
         
         {/* Actions */}
-        <div className="flex gap-3 pt-2">
+        <div className="flex flex-col md:flex-row gap-3 pt-2">
           {/* Public/Private Toggle */}
           <Button
             variant="ghost"
-            className={`border border-neutral-700 h-10 px-4 text-sm transition-colors ${
+            className={`border border-neutral-700 h-10 px-4 text-sm transition-colors w-full md:w-auto ${
               isPublic 
                 ? "bg-neutral-800 hover:bg-neutral-700 text-neutral-300" 
                 : "bg-amber-900/20 border-amber-500/30 text-amber-500 hover:bg-amber-900/30"
@@ -221,11 +221,11 @@ export default function BulkGeneratePage() {
             )}
           </Button>
 
-          <Button variant="outline" onClick={generatePreview} disabled={isPreviewing || !targetSubject.trim()} className="border-neutral-700 h-10 px-6 text-sm hover:bg-neutral-800 text-neutral-300 hover:text-white">
+          <Button variant="outline" onClick={generatePreview} disabled={isPreviewing || !targetSubject.trim()} className="border-neutral-700 h-10 px-6 text-sm hover:bg-neutral-800 text-neutral-300 hover:text-white w-full md:w-auto">
             {isPreviewing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Eye className="w-4 h-4 mr-2" />}
             Preview
           </Button>
-          <Button onClick={createBatchJob} disabled={isLoading || !targetSubject.trim() || !category.trim()} className="bg-indigo-600 hover:bg-indigo-700 flex-1 h-10 text-sm font-medium">
+          <Button onClick={createBatchJob} disabled={isLoading || !targetSubject.trim() || !category.trim()} className="bg-indigo-600 hover:bg-indigo-700 h-10 text-sm font-medium w-full md:flex-1">
             {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
             Generate {totalImages} Images
           </Button>
