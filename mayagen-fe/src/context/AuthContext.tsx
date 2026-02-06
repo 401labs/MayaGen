@@ -60,7 +60,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const login = (token: string) => {
     localStorage.setItem("access_token", token);
     fetchUser();
-    router.push("/");
+    
+    // Check if there's a pending generation request
+    const pendingGeneration = localStorage.getItem("pendingGeneration");
+    if (pendingGeneration) {
+      // Redirect to home page to process the pending generation
+      router.push("/");
+    } else {
+      router.push("/collections");
+    }
   };
 
   const logout = () => {

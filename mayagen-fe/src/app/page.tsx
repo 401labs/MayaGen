@@ -70,6 +70,47 @@ export default function Home() {
     fetchRecent();
   }, []);
 
+  // Process pending generation after login
+  useEffect(() => {
+    const processPendingGeneration = async () => {
+      const pendingData = localStorage.getItem('pendingGeneration');
+      if (!pendingData || !user) return;
+      
+      try {
+        const pending = JSON.parse(pendingData);
+        localStorage.removeItem('pendingGeneration');
+        
+        toast.info("Processing your pending generation...");
+        setIsLoading(true);
+        
+        const response = await api.post('/generate', {
+          prompt: pending.prompt,
+          filename_prefix: "mayagen_ui",
+          width: pending.width,
+          height: pending.height,
+          provider: pending.provider,
+          model: pending.model,
+          category: pending.category
+        });
+
+        if (response.data.success) {
+          toast.success("Generation started! Redirecting to your collection...");
+          router.push('/collections');
+        } else {
+          toast.error("Generation failed");
+        }
+      } catch (err: any) {
+        const errorMsg = err.response?.data?.message || err.message || "An error occurred";
+        toast.error(errorMsg);
+        localStorage.removeItem('pendingGeneration');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    processPendingGeneration();
+  }, [user, router]);
+
   const generateImage = async () => {
     if (!prompt.trim()) { toast.error("Please enter a prompt"); return; }
     if (!category.trim()) { 
@@ -78,6 +119,16 @@ export default function Home() {
       return; 
     }
     if (!user) {
+      // Store the generation request for after login
+      localStorage.setItem('pendingGeneration', JSON.stringify({
+        prompt: prompt.trim(),
+        width,
+        height,
+        provider,
+        model,
+        category: category || "uncategorized"
+      }));
+      toast.info("Please log in to generate images");
       router.push("/login");
       return;
     }
@@ -96,9 +147,9 @@ export default function Home() {
       });
 
       if (response.data.success) {
-        toast.success("Generation started! Check the gallery.");
+        toast.success("Generation started! Redirecting to your collection...");
         setPrompt('');
-        router.push('/gallery');
+        router.push('/collections');
       } else {
         toast.error("Generation failed");
       }
@@ -160,26 +211,9 @@ export default function Home() {
       {/* Prompt Input Section */}
       <section className="px-4 mb-16">
         <div className="max-w-2xl mx-auto">
-          <div className={`relative bg-neutral-900/80 backdrop-blur-sm rounded-2xl border ${user ? 'border-neutral-700 focus-within:border-indigo-500/50 focus-within:shadow-lg focus-within:shadow-indigo-500/10' : 'border-neutral-800/50'} transition-all`}>
+          <div className={`relative bg-neutral-900/80 backdrop-blur-sm rounded-2xl border border-neutral-700 focus-within:border-indigo-500/50 focus-within:shadow-lg focus-within:shadow-indigo-500/10 transition-all`}>
             
-            {/* Not logged in overlay */}
-            {!user && (
-              <div className="absolute inset-0 bg-neutral-900/90 backdrop-blur-sm rounded-2xl z-10 flex flex-col items-center justify-center gap-4">
-                <div className="p-4 rounded-full bg-neutral-800">
-                  <Lock className="w-8 h-8 text-neutral-500" />
-                </div>
-                <div className="text-center">
-                  <p className="text-neutral-300 font-medium mb-1">Sign in to start generating</p>
-                  <p className="text-sm text-neutral-500">Create an account to unlock AI image generation</p>
-                </div>
-                <Link href="/login">
-                  <Button className="bg-indigo-600 hover:bg-indigo-700 mt-2">
-                    Login to Continue
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </Link>
-              </div>
-            )}
+            {/* Input area - always visible */}
 
             <div className="p-4">
               <textarea
@@ -190,7 +224,6 @@ export default function Home() {
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={handleKeyDown}
                 rows={2}
-                disabled={!user}
               />
             </div>
 
@@ -202,25 +235,22 @@ export default function Home() {
                   size="sm"
                   className="text-neutral-400 hover:text-white hover:bg-neutral-800 h-8 px-3 text-xs"
                   onClick={() => setShowAdvanced(!showAdvanced)}
-                  disabled={!user}
                 >
                   <Settings2 className="w-4 h-4 mr-1.5" />
                   Settings
                   <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
                 </Button>
                 
-                {user && (
-                  <div className="hidden sm:flex items-center gap-2 text-xs text-neutral-500">
-                    <span className="px-2 py-1 rounded bg-neutral-800/50">{MODEL_DISPLAY[model]}</span>
-                    <span className="px-2 py-1 rounded bg-neutral-800/50">{width}×{height}</span>
-                  </div>
-                )}
+                <div className="hidden sm:flex items-center gap-2 text-xs text-neutral-500">
+                  <span className="px-2 py-1 rounded bg-neutral-800/50">{MODEL_DISPLAY[model]}</span>
+                  <span className="px-2 py-1 rounded bg-neutral-800/50">{width}×{height}</span>
+                </div>
               </div>
 
               <Button
                 className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed h-10 px-6"
                 onClick={generateImage}
-                disabled={isLoading || !prompt.trim() || !user}
+                disabled={isLoading || !prompt.trim()}
               >
                 {isLoading ? (
                   <>
@@ -237,7 +267,7 @@ export default function Home() {
             </div>
 
             {/* Advanced Settings Panel */}
-            {showAdvanced && user && (
+            {showAdvanced && (
               <div className="border-t border-neutral-800 p-4">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className="space-y-2">
@@ -326,7 +356,6 @@ export default function Home() {
                 key={suggestion}
                 className="px-4 py-2 text-sm text-neutral-400 bg-neutral-900/50 hover:bg-neutral-800 hover:text-white rounded-full border border-neutral-800 transition-all"
                 onClick={() => setPrompt(suggestion)}
-                disabled={!user}
               >
                 {suggestion}
               </button>
