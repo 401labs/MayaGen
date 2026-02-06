@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PaginationControl } from "@/components/ui/pagination-control";
 import { Loader2, Search, Filter, Grid, LayoutGrid, Image as ImageIcon, User, Calendar, Sparkles, FolderOpen, Clock, AlertCircle, RefreshCw } from "lucide-react";
 import Link from 'next/link';
 import { toast } from "sonner";
@@ -40,11 +41,16 @@ export default function GalleryPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [modelFilter, setModelFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('masonry');
+  
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const LIMIT = 24; // Images per page
 
-  // Extract unique categories
+  // Extract unique categories (Note: This only extracts from current page, practically distinct categories should come from a separate API or pre-defined list, but for now we keep as is)
   const categories = [...new Set(gallery.map(img => img.category))];
 
-  // Filtered gallery
+  // Filtered gallery (Client-side filtering for search - ideally search should be server side too but we keep hybrid for now)
   const filteredGallery = gallery.filter(img => {
     const matchesSearch = img.prompt.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           img.filename.toLowerCase().includes(searchQuery.toLowerCase());
@@ -53,12 +59,17 @@ export default function GalleryPage() {
     return matchesSearch && matchesCategory && matchesModel;
   });
 
-  const fetchGallery = async () => {
+  const fetchGallery = async (pageNum: number = 1) => {
     setIsLoading(true);
     try {
-      const res = await api.get('/images');
+      const res = await api.get(`/images?page=${pageNum}&limit=${LIMIT}`);
       if (res.data.success) {
         setGallery(res.data.data.images);
+        // Handle Meta
+        if (res.data.data.meta) {
+          setTotalPages(res.data.data.meta.total_pages);
+          setPage(res.data.data.meta.page);
+        }
       }
     } catch (e) {
       console.error("Failed to fetch gallery", e);
@@ -69,8 +80,14 @@ export default function GalleryPage() {
   };
 
   useEffect(() => {
-    fetchGallery();
-  }, []);
+    fetchGallery(page);
+  }, [page]); // Re-run when page changes
+
+  // Reset page when filters change? 
+  // Ideally, but since filtering is client-side for currently fetched batch, it behaves oddly.
+  // For proper implementation, search/filter should be server params. 
+  // Retaining current behavior (client filter on current page) is minimal impact but confusing.
+  // Let's keep it simple: Pagination fetches new data. Filters filter THAT data.
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 pb-24">
@@ -82,12 +99,12 @@ export default function GalleryPage() {
               <ImageIcon className="w-6 h-6 text-indigo-400" />
               <h1 className="text-xl font-bold">Gallery</h1>
               <Badge variant="secondary" className="bg-neutral-800 text-neutral-300">
-                {filteredGallery.length} images
+                Page {page} of {totalPages}
               </Badge>
             </div>
             
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={fetchGallery} className="border-neutral-800 hover:bg-neutral-800 text-neutral-400">
+              <Button variant="outline" size="sm" onClick={() => fetchGallery(page)} className="border-neutral-800 hover:bg-neutral-800 text-neutral-400">
                 <RefreshCw className="w-4 h-4" />
               </Button>
               <Link href="/">
@@ -105,7 +122,7 @@ export default function GalleryPage() {
             <div className="relative flex-1 min-w-[200px] max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
               <Input
-                placeholder="Search prompts..."
+                placeholder="Search prompt on this page..."
                 className="pl-9 bg-neutral-900 border-neutral-800 focus:border-indigo-500"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -125,8 +142,8 @@ export default function GalleryPage() {
                 ))}
               </SelectContent>
             </Select>
-
-            {/* Model Filter */}
+            
+             {/* Model Filter */}
             <Select value={modelFilter} onValueChange={setModelFilter}>
               <SelectTrigger className="w-[160px] bg-neutral-900 border-neutral-800">
                 <Filter className="w-4 h-4 mr-2 text-neutral-500" />
@@ -178,23 +195,36 @@ export default function GalleryPage() {
             <p className="text-sm opacity-50">
               {searchQuery || categoryFilter !== 'all' || modelFilter !== 'all'
                 ? "Try adjusting your filters"
-                : "Start generating to see your creations here"}
+                : "No images on this page"}
             </p>
           </div>
-        ) : viewMode === 'masonry' ? (
-          // Masonry Layout
-          <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-            {filteredGallery.map((img) => (
-              <GalleryCard key={img.id} image={img} />
-            ))}
-          </div>
         ) : (
-          // Grid Layout
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filteredGallery.map((img) => (
-              <GalleryCard key={img.id} image={img} isSquare />
-            ))}
-          </div>
+           <>
+            {viewMode === 'masonry' ? (
+              // Masonry Layout
+              <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+                {filteredGallery.map((img) => (
+                  <GalleryCard key={img.id} image={img} />
+                ))}
+              </div>
+            ) : (
+              // Grid Layout
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredGallery.map((img) => (
+                  <GalleryCard key={img.id} image={img} isSquare />
+                ))}
+              </div>
+            )}
+           </>
+        )}
+
+        {/* Pagination Controls */}
+        {!isLoading && filteredGallery.length > 0 && (
+          <PaginationControl
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         )}
       </main>
     </div>

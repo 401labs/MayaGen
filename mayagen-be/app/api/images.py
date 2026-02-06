@@ -17,16 +17,31 @@ from sqlalchemy import case
 
 # ...
 
+from sqlalchemy import func
+
 @router.get("/images")
 async def list_images(
     session: AsyncSession = Depends(get_session),
-    current_user: Optional[User] = Depends(deps.get_current_user_optional) # Optional auth
+    current_user: Optional[User] = Depends(deps.get_current_user_optional), # Optional auth
+    page: int = 1,
+    limit: int = 20
 ):
     try:
         """Lists generated images. Public feed."""
         # TODO: This hardcoded URL needs to be dynamic or from config
         base_url = "http://127.0.0.1:8000/images"
         
+        # Calculate offset
+        offset = (page - 1) * limit
+        
+        # Base query for filtering
+        base_query = select(Image).where(Image.is_public == True).where(Image.status == JobStatus.COMPLETED)
+        
+        # Count total
+        count_statement = select(func.count()).select_from(base_query.subquery())
+        total_result = await session.execute(count_statement)
+        total = total_result.scalar_one()
+
         # Custom sort order: COMPLETED (1), PROCESSING (2), QUEUED (3), FAILED (4)
         status_order = case(
             (Image.status == JobStatus.COMPLETED, 1),
@@ -45,6 +60,8 @@ async def list_images(
             .where(Image.is_public == True)
             .where(Image.status == JobStatus.COMPLETED)
             .order_by(Image.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
         results = await session.execute(statement)
         # Results is list of (Image, User) tuples
@@ -73,7 +90,15 @@ async def list_images(
             
         return responses.api_success(
             message="Images List Retrieved",
-            data={"images": response_list}
+            data={
+                "images": response_list,
+                "meta": {
+                    "total": total,
+                    "page": page,
+                    "limit": limit,
+                    "total_pages": (total + limit - 1) // limit
+                }
+            }
         )
     except Exception as e:
         import traceback
@@ -84,11 +109,15 @@ async def list_images(
 @router.get("/images/me")
 async def get_my_images(
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(deps.get_current_user)
+    current_user: User = Depends(deps.get_current_user),
+    page: int = 1,
+    limit: int = 20
 ):
     """Get all images created by the current user (Private & Public)."""
     try:
         base_url = "http://127.0.0.1:8000/images"
+        
+        offset = (page - 1) * limit
         
         # Custom sort order: COMPLETED (1), PROCESSING (2), QUEUED (3), FAILED (4)
         status_order = case(
@@ -99,10 +128,17 @@ async def get_my_images(
             else_=5
         )
 
+        # Count total
+        count_statement = select(func.count()).where(Image.user_id == current_user.id)
+        total_result = await session.execute(count_statement)
+        total = total_result.scalar_one()
+
         statement = (
             select(Image)
             .where(Image.user_id == current_user.id)
             .order_by(status_order, Image.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
         results = await session.execute(statement)
         images = results.scalars().all()
@@ -131,7 +167,15 @@ async def get_my_images(
             
         return responses.api_success(
             message="User Collection Retrieved",
-            data={"images": response_list}
+            data={
+                "images": response_list,
+                "meta": {
+                    "total": total,
+                    "page": page,
+                    "limit": limit,
+                    "total_pages": (total + limit - 1) // limit
+                }
+            }
         )
     except Exception as e:
         import traceback

@@ -11,6 +11,7 @@ import { Loader2, Search, Filter, Grid, LayoutGrid, Image as ImageIcon, FolderOp
 import Link from 'next/link';
 import { toast } from "sonner";
 import { useRouter } from 'next/navigation';
+import { PaginationControl } from "@/components/ui/pagination-control";
 
 interface GalleryImage {
   id: number;
@@ -42,6 +43,11 @@ export default function CollectionsPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [modelFilter, setModelFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('masonry');
+  
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const LIMIT = 24;
 
   // Redirect if not logged in
   useEffect(() => {
@@ -50,12 +56,16 @@ export default function CollectionsPage() {
     }
   }, [user, authLoading, router]);
 
-  const fetchCollection = async () => {
+  const fetchCollection = async (pageNum: number = 1) => {
     setIsLoading(true);
     try {
-      const res = await api.get('/images/me');
+      const res = await api.get(`/images/me?page=${pageNum}&limit=${LIMIT}`);
       if (res.data.success) {
         setGallery(res.data.data.images);
+        if (res.data.data.meta) {
+          setTotalPages(res.data.data.meta.total_pages);
+          setPage(res.data.data.meta.page);
+        }
       }
     } catch (e: any) {
       console.error("Failed to fetch collection", e);
@@ -67,9 +77,9 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     if (user) {
-      fetchCollection();
+      fetchCollection(page);
     }
-  }, [user]);
+  }, [user, page]);
 
   // Extract unique categories
   const categories = [...new Set(gallery.map(img => img.category))];
@@ -108,7 +118,7 @@ export default function CollectionsPage() {
             </div>
             
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={fetchCollection} className="border-neutral-800 hover:bg-neutral-800 text-neutral-400">
+              <Button variant="outline" size="sm" onClick={() => fetchCollection(page)} className="border-neutral-800 hover:bg-neutral-800 text-neutral-400">
                 <RefreshCw className="w-4 h-4" />
               </Button>
               <Link href="/">
@@ -213,6 +223,15 @@ export default function CollectionsPage() {
           </div>
         )}
       </main>
+
+      {/* Pagination Controls */}
+      {!isLoading && filteredGallery.length > 0 && (
+        <PaginationControl
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+        />
+      )}
     </div>
   );
 }
