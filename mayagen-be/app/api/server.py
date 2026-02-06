@@ -43,9 +43,17 @@ async def general_exception_handler(request, exc):
     )
 # ---------------------------------
 
+# CORS Configuration - restrict in production
+allowed_origins = ["*"]  # Default for development
+if config.ENVIRONMENT == "production":
+    allowed_origins = [
+        "https://mayagen.fun",
+        "https://www.mayagen.fun",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=allowed_origins, 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
