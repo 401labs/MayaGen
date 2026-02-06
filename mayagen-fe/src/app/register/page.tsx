@@ -15,13 +15,29 @@ export default function RegisterPage() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+  const hasMinLength = password.length > 8;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+
+    if (!hasSpecialChar || !hasMinLength) {
+      setError("Password does not meet requirements");
+      setLoading(false);
+      return;
+    }
 
     try {
       await api.post("/auth/register", { username, email, password });
@@ -34,80 +50,140 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-neutral-950 p-4">
-      <Card className="w-full max-w-md bg-neutral-900 border-neutral-800 text-neutral-100">
-        <CardHeader className="space-y-1">
-          <div className="flex items-center gap-2 justify-center mb-4">
-            <Sparkles className="w-8 h-8 text-cyan-500" />
-            <span className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-indigo-400 bg-clip-text text-transparent">
-              MayaGen
-            </span>
+    <div className="min-h-screen flex items-center justify-center bg-neutral-950 text-white selection:bg-cyan-500/30 p-4 lg:p-8">
+      <div className="w-full max-w-[1400px] grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+
+        {/* Left Panel - Branding Card */}
+        <div className="hidden lg:flex flex-col justify-between relative bg-neutral-900 h-[800px] w-full rounded-[2.5rem] overflow-hidden p-12 ring-1 ring-white/10">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_rgba(76,29,149,0.4),_rgba(0,0,0,0)_70%)] opacity-70 pointer-events-none"></div>
+          {/* Gradient Overlay for the rich purple/blue look */}
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-900/40 via-blue-900/20 to-black z-0"></div>
+
+          {/* Abstract blurred shapes for the glow effect */}
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-violet-600/30 rounded-full blur-3xl z-0 mix-blend-screen animate-pulse duration-[4s]"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl z-0 mix-blend-screen"></div>
+
+          <div className="relative z-10 flex items-center gap-2">
+            <Sparkles className="w-8 h-8 text-white" />
+            <span className="text-xl font-semibold tracking-wide">MAYAGEN</span>
           </div>
-          <CardTitle className="text-2xl text-center">Create Account</CardTitle>
-          <CardDescription className="text-center text-neutral-400">
-            Join the studio to save your creations
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                placeholder="CreativeSoul"
-                className="bg-neutral-950 border-neutral-700"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
+
+          <div className="relative z-10 space-y-4 max-w-lg mb-20">
+            <h1 className="text-6xl font-bold tracking-tight leading-tight">
+              Your Vision.<br />
+              Your Studio.<br />
+              <span className="text-neutral-400">Your Reality.</span>
+            </h1>
+            <p className="text-neutral-400 text-lg max-w-sm">
+              Unleash your creativity with MayaGen. Transform text into stunning visual masterpieces and build high-quality synthetic datasets in seconds.
+            </p>
+          </div>
+          {/* Grid overlay pattern */}
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:100px_100px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_70%)] pointer-events-none z-0"></div>
+        </div>
+
+        {/* Right Panel - Form */}
+        <div className="w-full flex items-center justify-center p-8">
+          <div className="w-full max-w-md space-y-8">
+            <div className="space-y-2 text-center lg:text-left">
+              <h2 className="text-3xl font-medium tracking-tight">Sign Up An Account</h2>
+              <p className="text-neutral-500">Enter personal data to create your account</p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                className="bg-neutral-950 border-neutral-700"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                className="bg-neutral-950 border-neutral-700"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            {error && (
-              <div className="text-red-400 text-sm text-center bg-red-900/10 p-2 rounded">
-                {error}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2 col-span-2 lg:col-span-1">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    placeholder="Enter username"
+                    className="bg-neutral-900 border-none h-12 rounded-lg text-neutral-300 placeholder:text-neutral-600 focus-visible:ring-1 focus-visible:ring-violet-500"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2 col-span-2 lg:col-span-1">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="Enter email address"
+                    className="bg-neutral-900 border-none h-12 rounded-lg text-neutral-300 placeholder:text-neutral-600 focus-visible:ring-1 focus-visible:ring-violet-500"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
-            )}
-          </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button
-              type="submit"
-              className="w-full bg-cyan-600 hover:bg-cyan-700 text-white"
-              disabled={loading}
-            >
-              {loading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <UserPlus className="mr-2 h-4 w-4" />}
-              Create Account
-            </Button>
-            <div className="text-sm text-neutral-500 text-center">
-              Already have an account?{" "}
-              <Link href="/login" className="text-cyan-400 hover:text-cyan-300">
-                Login
-              </Link>
-            </div>
-          </CardFooter>
-        </form>
-      </Card>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••••••••"
+                  className="bg-neutral-900 border-none h-12 rounded-lg text-neutral-300 placeholder:text-neutral-600 focus-visible:ring-1 focus-visible:ring-violet-500"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              {/* Password Requirements */}
+              <div className="space-y-2 text-sm text-neutral-400">
+                <div className="flex items-center gap-2">
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${hasSpecialChar ? 'border-violet-500 bg-violet-500 text-white' : 'border-neutral-700'}`}>
+                    {hasSpecialChar && <Sparkles className="w-2.5 h-2.5" />}
+                  </div>
+                  <span className={hasSpecialChar ? 'text-neutral-300' : ''}>Key must have special symbols like @#$% etc.</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${hasMinLength ? 'border-violet-500 bg-violet-500 text-white' : 'border-neutral-700'}`}>
+                    {hasMinLength && <Sparkles className="w-2.5 h-2.5" />}
+                  </div>
+                  <span className={hasMinLength ? 'text-neutral-300' : ''}>Key must be longer than 8 symbols</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  placeholder="••••••••••••••"
+                  className="bg-neutral-900 border-none h-12 rounded-lg text-neutral-300 placeholder:text-neutral-600 focus-visible:ring-1 focus-visible:ring-violet-500"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              {error && (
+                <div className="text-red-400 text-sm text-center bg-red-900/10 p-2 rounded">
+                  {error}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-base font-medium transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_25px_rgba(79,70,229,0.5)]"
+                disabled={loading}
+              >
+                {loading ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : "Sign Up"}
+              </Button>
+
+              <div className="text-sm text-neutral-500 text-center">
+                Already have an account?{" "}
+                <Link href="/login" className="text-white hover:underline decoration-violet-500 underline-offset-4">
+                  Log in
+                </Link>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
