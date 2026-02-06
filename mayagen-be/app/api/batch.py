@@ -312,12 +312,9 @@ async def get_batch_images(
         # 4. FAILED / CANCELLED (Show errors last)
         status_order = case(
             (Image.status == JobStatus.COMPLETED, 1),
-            (Image.status == JobStatus.GENERATING, 2),
             (Image.status == JobStatus.PROCESSING, 2),
             (Image.status == JobStatus.QUEUED, 3),
-            (Image.status == JobStatus.PENDING, 3),
             (Image.status == JobStatus.FAILED, 4),
-            (Image.status == JobStatus.CANCELLED, 5),
             else_=6
         )
 
