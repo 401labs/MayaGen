@@ -303,10 +303,28 @@ async def get_batch_images(
         base_url = config.API_BASE_URL + "/images"
         offset = (page - 1) * limit
         
+        from sqlalchemy import case
+
+        # Define Custom Sort Order:
+        # 1. COMPLETED (Show results first)
+        # 2. GENERATING / PROCESSING (Show active work)
+        # 3. QUEUED / PENDING (Show upcoming)
+        # 4. FAILED / CANCELLED (Show errors last)
+        status_order = case(
+            (Image.status == JobStatus.COMPLETED, 1),
+            (Image.status == JobStatus.GENERATING, 2),
+            (Image.status == JobStatus.PROCESSING, 2),
+            (Image.status == JobStatus.QUEUED, 3),
+            (Image.status == JobStatus.PENDING, 3),
+            (Image.status == JobStatus.FAILED, 4),
+            (Image.status == JobStatus.CANCELLED, 5),
+            else_=6
+        )
+
         statement = (
             select(Image)
             .where(Image.batch_job_id == batch_id)
-            .order_by(Image.created_at.desc())
+            .order_by(status_order, Image.created_at.desc())
             .offset(offset)
             .limit(limit)
         )
