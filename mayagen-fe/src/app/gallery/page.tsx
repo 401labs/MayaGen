@@ -40,7 +40,7 @@ export default function GalleryPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [modelFilter, setModelFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('masonry');
-  
+
   // Pagination State
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -52,7 +52,7 @@ export default function GalleryPage() {
   // Filtered gallery (Client-side filtering for search - ideally search should be server side too but we keep hybrid for now)
   const filteredGallery = gallery.filter(img => {
     const matchesSearch = img.prompt.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          img.filename.toLowerCase().includes(searchQuery.toLowerCase());
+      img.filename.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || img.category === categoryFilter;
     const matchesModel = modelFilter === 'all' || img.model === modelFilter;
     return matchesSearch && matchesCategory && matchesModel;
@@ -91,18 +91,18 @@ export default function GalleryPage() {
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 pb-24">
       {/* Header */}
-      <header className="sticky top-0 z-40 backdrop-blur-lg bg-neutral-950/80 border-b border-neutral-800">
+      <header className="z-40 backdrop-blur-lg bg-neutral-950/80 border-b border-neutral-800">
         <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <ImageIcon className="w-6 h-6 text-indigo-400" />
               <h1 className="text-xl font-bold">Gallery</h1>
-              <Badge variant="secondary" className="bg-neutral-800 text-neutral-300">
+              <Badge variant="secondary" className="bg-neutral-800 text-neutral-300 whitespace-nowrap">
                 Page {page} of {totalPages}
               </Badge>
             </div>
-            
-            <div className="flex items-center gap-2">
+
+            <div className="flex w-full md:w-auto items-center justify-between gap-4 md:gap-2">
               <Button variant="outline" size="sm" onClick={() => fetchGallery(page)} className="border-neutral-800 hover:bg-neutral-800 text-neutral-400">
                 <RefreshCw className="w-4 h-4" />
               </Button>
@@ -118,11 +118,11 @@ export default function GalleryPage() {
           {/* Filters Row */}
           <div className="flex flex-wrap items-center gap-3 mt-4">
             {/* Search */}
-            <div className="relative flex-1 min-w-[200px] max-w-md">
+            <div className="relative w-full md:flex-1 min-w-[200px] md:max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
               <Input
                 placeholder="Search prompt on this page..."
-                className="pl-9 bg-neutral-900 border-neutral-800 focus:border-indigo-500"
+                className="pl-9 bg-neutral-900 border-neutral-800 focus:border-indigo-500 w-full"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -130,9 +130,11 @@ export default function GalleryPage() {
 
             {/* Category Filter */}
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-[160px] bg-neutral-900 border-neutral-800">
-                <FolderOpen className="w-4 h-4 mr-2 text-neutral-500" />
-                <SelectValue placeholder="Category" />
+              <SelectTrigger className="w-full md:w-[160px] bg-neutral-900 border-neutral-800">
+                <div className="flex items-center truncate">
+                  <FolderOpen className="w-4 h-4 mr-2 text-neutral-500 flex-shrink-0" />
+                  <SelectValue placeholder="Category" />
+                </div>
               </SelectTrigger>
               <SelectContent className="bg-neutral-900 border-neutral-700 text-neutral-200">
                 <SelectItem value="all">All Categories</SelectItem>
@@ -141,12 +143,14 @@ export default function GalleryPage() {
                 ))}
               </SelectContent>
             </Select>
-            
-             {/* Model Filter */}
+
+            {/* Model Filter */}
             <Select value={modelFilter} onValueChange={setModelFilter}>
-              <SelectTrigger className="w-[160px] bg-neutral-900 border-neutral-800">
-                <Filter className="w-4 h-4 mr-2 text-neutral-500" />
-                <SelectValue placeholder="Model" />
+              <SelectTrigger className="w-full md:w-[160px] bg-neutral-900 border-neutral-800">
+                <div className="flex items-center truncate">
+                  <Filter className="w-4 h-4 mr-2 text-neutral-500 flex-shrink-0" />
+                  <SelectValue placeholder="Model" />
+                </div>
               </SelectTrigger>
               <SelectContent className="bg-neutral-900 border-neutral-700 text-neutral-200">
                 <SelectItem value="all">All Models</SelectItem>
@@ -157,7 +161,7 @@ export default function GalleryPage() {
             </Select>
 
             {/* View Toggle */}
-            <div className="flex items-center gap-1 bg-neutral-900 rounded-lg p-1 border border-neutral-800">
+            <div className="hidden md:flex items-center gap-1 bg-neutral-900 rounded-lg p-1 border border-neutral-800 ml-auto md:ml-0">
               <Button
                 variant="ghost"
                 size="icon"
@@ -180,9 +184,9 @@ export default function GalleryPage() {
       </header>
 
       {/* Gallery Grid */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 md:px-6 py-8">
         {isLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="aspect-square rounded-xl bg-neutral-900 animate-pulse" />
             ))}
@@ -198,23 +202,23 @@ export default function GalleryPage() {
             </p>
           </div>
         ) : (
-           <>
+          <>
             {viewMode === 'masonry' ? (
               // Masonry Layout
-              <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+              <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
                 {filteredGallery.map((img) => (
                   <GalleryCard key={img.id} image={img} />
                 ))}
               </div>
             ) : (
               // Grid Layout
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {filteredGallery.map((img) => (
                   <GalleryCard key={img.id} image={img} isSquare />
                 ))}
               </div>
             )}
-           </>
+          </>
         )}
 
         {/* Pagination Controls */}
@@ -237,7 +241,7 @@ function GalleryCard({ image, isSquare }: { image: GalleryImage; isSquare?: bool
   const isProcessing = status === 'PROCESSING';
   const isFailed = status === 'FAILED';
   const isCompleted = status === 'COMPLETED';
-  
+
   // Calculate aspect ratio
   const aspectRatio = image.width && image.height ? image.width / image.height : 0.75; // Default to 3:4 if unknown
 
@@ -261,10 +265,10 @@ function GalleryCard({ image, isSquare }: { image: GalleryImage; isSquare?: bool
         <div className="w-full h-full relative overflow-hidden">
           {/* Animated gradient background */}
           <div className="absolute inset-0 bg-gradient-to-br from-neutral-900 via-neutral-800 to-neutral-900" />
-          
+
           {/* Shimmer effect */}
           <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent" />
-          
+
           {/* Content */}
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-4">
             <div className="relative">
@@ -323,12 +327,11 @@ function GalleryCard({ image, isSquare }: { image: GalleryImage; isSquare?: bool
       {/* Status Badge (visible if not completed, or if completed and hovering? Actually usually hidden for completed to show clean image) */}
       {!isCompleted && (
         <div className="absolute top-2 right-2">
-          <Badge className={`text-xs ${
-            isFailed ? 'bg-red-900/80 text-red-300' : 
-            isProcessing ? 'bg-indigo-900/80 text-indigo-300 animate-pulse' : 
-            isQueued ? 'bg-amber-900/80 text-amber-300' :
-            'bg-neutral-800 text-neutral-400'
-          }`}>
+          <Badge className={`text-xs ${isFailed ? 'bg-red-900/80 text-red-300' :
+            isProcessing ? 'bg-indigo-900/80 text-indigo-300 animate-pulse' :
+              isQueued ? 'bg-amber-900/80 text-amber-300' :
+                'bg-neutral-800 text-neutral-400'
+            }`}>
             {status}
           </Badge>
         </div>
