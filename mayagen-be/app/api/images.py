@@ -182,52 +182,6 @@ async def get_my_images(
         traceback.print_exc()
         return responses.api_error(status_code=500, message="Failed to get user collection", error=str(e))
 
-@router.get("/api/images/{image_id}")
-async def get_image(
-    image_id: int,
-    session: AsyncSession = Depends(get_session),
-    current_user: Optional[User] = Depends(deps.get_current_user_optional)
-):
-    try:
-        """Get a single image detail."""
-        base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:8000") + "/images"
-        
-        # Query with User join
-        statement = select(Image, User).where(Image.id == image_id).join(User, isouter=True)
-        result = await session.execute(statement)
-        row = result.first()
-        
-        if not row:
-            return responses.api_error(status_code=404, message="Not Found", error="Image not found")
-            
-        img, user = row
-        
-        url = None
-        if img.status == JobStatus.COMPLETED:
-            safe_category = img.category.replace("\\", "/") if img.category else "uncategorized"
-            url = f"{base_url}/{safe_category}/{img.filename}"
-
-        return responses.api_success(
-            message="Image Detail Retrieved",
-            data={
-                "id": img.id,
-                "filename": img.filename,
-                "category": img.category,
-                "url": url,
-                "prompt": img.prompt,
-                "width": img.width,
-                "height": img.height,
-                "model": img.model,
-                "provider": img.provider,
-                "created_at": img.created_at.isoformat(),
-                "created_by": user.username if user else "Anonymous",
-                "is_public": img.is_public,
-                "status": img.status
-            }
-        )
-    except Exception as e:
-        return responses.api_error(status_code=500, message="Failed to retrieve image", error=str(e))
-
 @router.get("/images/recent")
 async def get_recent_images(
     session: AsyncSession = Depends(get_session),
@@ -275,4 +229,51 @@ async def get_recent_images(
         import traceback
         traceback.print_exc()
         return responses.api_error(status_code=500, message="Failed to get recent images", error=str(e))
+
+@router.get("/images/{image_id}")
+async def get_image(
+    image_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: Optional[User] = Depends(deps.get_current_user_optional)
+):
+    try:
+        """Get a single image detail."""
+        base_url = os.getenv("API_BASE_URL", "http://127.0.0.1:8000") + "/images"
+        
+        # Query with User join
+        statement = select(Image, User).where(Image.id == image_id).join(User, isouter=True)
+        result = await session.execute(statement)
+        row = result.first()
+        
+        if not row:
+            return responses.api_error(status_code=404, message="Not Found", error="Image not found")
+            
+        img, user = row
+        
+        url = None
+        if img.status == JobStatus.COMPLETED:
+            safe_category = img.category.replace("\\", "/") if img.category else "uncategorized"
+            url = f"{base_url}/{safe_category}/{img.filename}"
+
+        return responses.api_success(
+            message="Image Detail Retrieved",
+            data={
+                "id": img.id,
+                "filename": img.filename,
+                "category": img.category,
+                "url": url,
+                "prompt": img.prompt,
+                "width": img.width,
+                "height": img.height,
+                "model": img.model,
+                "provider": img.provider,
+                "created_at": img.created_at.isoformat(),
+                "created_by": user.username if user else "Anonymous",
+                "is_public": img.is_public,
+                "status": img.status
+            }
+        )
+    except Exception as e:
+        return responses.api_error(status_code=500, message="Failed to retrieve image", error=str(e))
+
 
