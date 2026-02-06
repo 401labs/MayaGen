@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Loader2, Layers, CheckCircle, Clock, AlertCircle, ArrowLeft, RefreshCw, Trash2, ChevronRight, Image as ImageIcon, Sparkles } from "lucide-react";
+import { ShareBatchDialog } from "@/components/bulk/ShareBatchDialog";
+import { Loader2, Layers, CheckCircle, Clock, AlertCircle, ArrowLeft, RefreshCw, Trash2, ChevronRight, Image as ImageIcon, Sparkles, Share2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
 import { toast } from "sonner";
@@ -20,12 +21,21 @@ interface BatchJob {
   failed_count: number;
   progress: number;
   created_at: string;
+  share_token?: string | null;
 }
 
 export default function BatchHistoryPage() {
   const { user, loading: authLoading } = useAuth();
   const [batches, setBatches] = useState<BatchJob[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Share Dialog State
+  const [shareDialog, setShareDialog] = useState<{isOpen: boolean; batchId: number; batchName: string; token?: string | null}>({
+    isOpen: false,
+    batchId: 0,
+    batchName: '',
+    token: null
+  });
 
   useEffect(() => {
     if (user) fetchBatches();
@@ -43,6 +53,26 @@ export default function BatchHistoryPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openShareDialog = (e: React.MouseEvent, batch: BatchJob) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShareDialog({
+      isOpen: true,
+      batchId: batch.id,
+      batchName: batch.name,
+      token: batch.share_token
+    });
+  };
+
+  const handleShareUpdate = (token: string | null) => {
+    // Update local state without refetching
+    setBatches(prev => prev.map(b => 
+      b.id === shareDialog.batchId ? { ...b, share_token: token } : b
+    ));
+    // Update dialog state too just in case
+    setShareDialog(prev => ({ ...prev, token }));
   };
 
   const confirmCancel = async () => {
@@ -201,6 +231,16 @@ export default function BatchHistoryPage() {
                      <span className="px-2 py-1 rounded-md bg-neutral-800 text-xs text-neutral-400 font-medium line-clamp-1 flex-1">
                         {batch.category}
                      </span>
+                     
+                     {/* Share Button */}
+                     <button
+                        onClick={(e) => openShareDialog(e, batch)}
+                        className={`p-1.5 rounded-md transition-all ${batch.share_token ? 'text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20' : 'text-neutral-500 hover:text-indigo-400 hover:bg-neutral-800'}`}
+                        title="Share Batch"
+                     >
+                       <Share2 className="w-4 h-4" />
+                     </button>
+
                      {(batch.status === 'queued' || batch.status === 'generating') && (
                        <button
                          onClick={(e) => promptCancel(batch.id, e)}
@@ -224,6 +264,16 @@ export default function BatchHistoryPage() {
           </div>
         )}
       </main>
+
+      {/* Share Dialog */}
+      <ShareBatchDialog 
+        isOpen={shareDialog.isOpen}
+        onClose={() => setShareDialog(prev => ({ ...prev, isOpen: false }))}
+        batchId={shareDialog.batchId}
+        batchName={shareDialog.batchName}
+        initialShareToken={shareDialog.token}
+        onUpdate={handleShareUpdate}
+      />
 
       {/* Confirmation Modal */}
       {cancelId && (

@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 import os
+import uuid
 
 from ..database import get_session
 from ..models import BatchJob, BatchJobStatus, User, Image, JobStatus
@@ -124,7 +125,8 @@ async def list_batch_jobs(
                 "generated_count": batch.generated_count,
                 "failed_count": batch.failed_count,
                 "progress": round((batch.generated_count / batch.total_images) * 100, 1) if batch.total_images > 0 else 0,
-                "created_at": batch.created_at.isoformat()
+                "created_at": batch.created_at.isoformat(),
+                "share_token": batch.share_token
             })
         
         return responses.api_success(
@@ -175,7 +177,9 @@ async def get_batch_job(
                 "height": batch.height,
                 "error_message": batch.error_message,
                 "created_at": batch.created_at.isoformat(),
-                "updated_at": batch.updated_at.isoformat()
+                "created_at": batch.created_at.isoformat(),
+                "updated_at": batch.updated_at.isoformat(),
+                "share_token": batch.share_token
             }
         )
     except Exception as e:
@@ -415,3 +419,172 @@ async def download_batch_images(
         if isinstance(e, HTTPException):
             raise e
         return responses.api_error(status_code=500, message="Download failed", error=str(e))
+
+
+# ==========================================
+# Sharing Endpoints
+# ==========================================
+
+@router.post("/batch/{batch_id}/share")
+async def generate_share_token(
+    batch_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """Generate or regenerate a unique share token for a batch."""
+    try:
+        statement = select(BatchJob).where(
+            BatchJob.id == batch_id, 
+            BatchJob.user_id == current_user.id
+        )
+        result = await session.execute(statement)
+        batch = result.scalar_one_or_none()
+        
+        if not batch:
+            return responses.api_error(status_code=404, message="Not Found", error="Batch job not found")
+            
+        # Generate new token
+        batch.share_token = str(uuid.uuid4())
+        session.add(batch)
+        await session.commit()
+        await session.refresh(batch)
+        
+        return responses.api_success(
+            message="Share link generated",
+            data={"id": batch.id, "share_token": batch.share_token}
+        )
+    except Exception as e:
+        return responses.api_error(status_code=500, message="Failed to generate share token", error=str(e))
+
+
+@router.delete("/batch/{batch_id}/share")
+async def revoke_share_token(
+    batch_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """Revoke the share token, making the link invalid."""
+    try:
+        statement = select(BatchJob).where(
+            BatchJob.id == batch_id, 
+            BatchJob.user_id == current_user.id
+        )
+        result = await session.execute(statement)
+        batch = result.scalar_one_or_none()
+        
+        if not batch:
+            return responses.api_error(status_code=404, message="Not Found", error="Batch job not found")
+            
+        batch.share_token = None
+        session.add(batch)
+        await session.commit()
+        
+        return responses.api_success(message="Share link revoked")
+    except Exception as e:
+        return responses.api_error(status_code=500, message="Failed to revoke share token", error=str(e))
+
+
+@router.get("/batch/shared/{token}")
+async def get_shared_batch(
+    token: str,
+    session: AsyncSession = Depends(get_session)
+):
+    """Public access to a batch via share token."""
+    try:
+        # Find batch by token
+        statement = select(BatchJob, User).join(User).where(BatchJob.share_token == token)
+        result = await session.execute(statement)
+        row = result.first()
+        
+        if not row:
+            return responses.api_error(status_code=404, message="Not Found", error="Invalid or expired share link")
+            
+        batch, user = row
+        
+        return responses.api_success(
+            message="Shared batch retrieved",
+            data={
+                "id": batch.id,
+                "name": batch.name,
+                "category": batch.category,
+                "target_subject": batch.target_subject,
+                "status": batch.status,
+                "total_images": batch.total_images,
+                "generated_count": batch.generated_count,
+                "progress": round((batch.generated_count / batch.total_images) * 100, 1) if batch.total_images > 0 else 0,
+                "model": batch.model,
+                "created_at": batch.created_at.isoformat(),
+                "created_by": user.username,
+                "variations": batch.variations # Needed for details
+            }
+        )
+    except Exception as e:
+        return responses.api_error(status_code=500, message="Failed to retrieve shared batch", error=str(e))
+
+
+@router.get("/batch/shared/{token}/images")
+async def get_shared_batch_images(
+    token: str,
+    page: int = 1,
+    limit: int = 24,
+    session: AsyncSession = Depends(get_session)
+):
+    """Public access to batch images via share token."""
+    try:
+        # Verify token
+        batch_stmt = select(BatchJob).where(BatchJob.share_token == token)
+        batch_result = await session.execute(batch_stmt)
+        batch = batch_result.scalar_one_or_none()
+        
+        if not batch:
+            return responses.api_error(status_code=404, message="Not Found", error="Invalid or expired share link")
+            
+        # Get images
+        base_url = config.API_BASE_URL + "/images"
+        offset = (page - 1) * limit
+        
+        # Get total
+        count_stmt = select(func.count()).where(Image.batch_job_id == batch.id).where(Image.status == JobStatus.COMPLETED)
+        total_result = await session.execute(count_stmt)
+        total = total_result.scalar_one()
+        
+        # Get Images (Only Completed for public view)
+        statement = (
+            select(Image)
+            .where(Image.batch_job_id == batch.id)
+            .where(Image.status == JobStatus.COMPLETED)
+            .order_by(Image.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        results = await session.execute(statement)
+        images = results.scalars().all()
+        
+        image_list = []
+        for img in images:
+            safe_category = img.category.replace("\\", "/") if img.category else "uncategorized"
+            url = f"{base_url}/{safe_category}/{img.filename}"
+            
+            image_list.append({
+                "id": img.id,
+                "filename": img.filename,
+                "url": url,
+                "prompt": img.prompt,
+                "width": img.width,
+                "height": img.height
+            })
+            
+        return responses.api_success(
+            message="Shared images retrieved",
+            data={
+                "images": image_list,
+                "meta": {
+                    "total": total,
+                    "page": page,
+                    "limit": limit,
+                    "total_pages": (total + limit - 1) // limit
+                }
+            }
+        )
+    except Exception as e:
+        return responses.api_error(status_code=500, message="Failed to retrieve shared images", error=str(e))

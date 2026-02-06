@@ -87,7 +87,9 @@ class BatchJob(SQLModel, table=True):
     provider: str = "comfyui"
     width: int = 512
     height: int = 512
+    height: int = 512
     is_public: bool = Field(default=True)
+    share_token: Optional[str] = Field(default=None, index=True, sa_column_kwargs={"unique": True})
     
     # Relationships
     user_id: int = Field(foreign_key="user.id")
