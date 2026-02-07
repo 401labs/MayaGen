@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { api } from "@/lib/api";
-import { Loader2, AlertCircle, Layers, Grid, LayoutDashboard, Download, Globe } from "lucide-react";
+import { Loader2, AlertCircle, Layers, Grid, LayoutDashboard, Download, Globe, ExternalLink } from "lucide-react";
+import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ interface SharedImage {
   prompt: string;
   width: number;
   height: number;
+  is_public: boolean;
 }
 
 export default function SharedBatchPage() {
@@ -39,7 +41,7 @@ export default function SharedBatchPage() {
   const [batch, setBatch] = useState<SharedBatch | null>(null);
   const [images, setImages] = useState<SharedImage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('masonry');
+  const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('grid');
   
   // Pagination State
   const [page, setPage] = useState(1);
@@ -175,16 +177,30 @@ export default function SharedBatchPage() {
         ) : (
             <>
                 {viewMode === 'masonry' ? (
-                     <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+                    <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
                         {images.map((img) => (
                             <div key={img.id} className="break-inside-avoid mb-4 relative group overflow-hidden rounded-xl bg-neutral-900 border border-neutral-800">
-                                <img 
-                                    src={img.url} 
-                                    alt={img.prompt}
-                                    className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105"
-                                    loading="lazy"
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-4 flex flex-col justify-end">
+                                {img.is_public ? (
+                                    <Link href={`/image/${img.id}`} className="block cursor-pointer">
+                                        <img 
+                                            src={img.url} 
+                                            alt={img.prompt}
+                                            className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105"
+                                            loading="lazy"
+                                        />
+                                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-black/50 backdrop-blur-md rounded-full text-white">
+                                            <ExternalLink className="w-3 h-3" />
+                                        </div>
+                                    </Link>
+                                ) : (
+                                    <img 
+                                        src={img.url} 
+                                        alt={img.prompt}
+                                        className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105"
+                                        loading="lazy"
+                                    />
+                                )}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-4 flex flex-col justify-end pointer-events-none">
                                     <p className="text-white text-xs line-clamp-2">{img.prompt}</p>
                                 </div>
                             </div>
@@ -194,12 +210,26 @@ export default function SharedBatchPage() {
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                          {images.map((img) => (
                             <div key={img.id} className="aspect-square relative group overflow-hidden rounded-xl bg-neutral-900 border border-neutral-800">
-                                <img 
-                                    src={img.url} 
-                                    alt={img.prompt}
-                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                    loading="lazy"
-                                />
+                                {img.is_public ? (
+                                    <Link href={`/image/${img.id}`} className="block h-full cursor-pointer">
+                                        <img 
+                                            src={img.url} 
+                                            alt={img.prompt}
+                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                            loading="lazy"
+                                        />
+                                         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-black/50 backdrop-blur-md rounded-full text-white z-10">
+                                            <ExternalLink className="w-3 h-3" />
+                                        </div>
+                                    </Link>
+                                ) : (
+                                    <img 
+                                        src={img.url} 
+                                        alt={img.prompt}
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                        loading="lazy"
+                                    />
+                                )}
                             </div>
                         ))}
                     </div>

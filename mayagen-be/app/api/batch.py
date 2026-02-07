@@ -586,7 +586,8 @@ async def get_shared_batch_images(
                 "url": url,
                 "prompt": img.prompt,
                 "width": img.width,
-                "height": img.height
+                "height": img.height,
+                "is_public": img.is_public
             })
             
         return responses.api_success(
