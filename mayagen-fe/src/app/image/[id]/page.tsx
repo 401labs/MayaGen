@@ -154,7 +154,16 @@ export default function ImageDetailPage() {
   const isOwner = user && image && Number(user.id) === Number(image.user_id);
 
   return (
-    <div className="h-screen bg-neutral-950 text-neutral-100 overflow-hidden flex flex-col">
+    <div className="min-h-screen lg:h-screen bg-neutral-950 text-neutral-100 lg:overflow-hidden flex flex-col">
+      <style jsx global>{`
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
       {/* Top Bar */}
       <header className="sticky top-0 z-50 backdrop-blur-lg bg-neutral-950/80 border-b border-neutral-800 px-6 py-3 flex items-center justify-between">
         <Button
@@ -190,7 +199,7 @@ export default function ImageDetailPage() {
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row lg:overflow-hidden">
         {/* Image Panel (Left) */}
         <div className="flex-1 flex items-center justify-center bg-neutral-950 relative overflow-hidden min-h-[50vh] lg:min-h-0 group">
           
@@ -273,8 +282,8 @@ export default function ImageDetailPage() {
         </div>
 
         {/* Details Panel (Right) */}
-        <aside className="w-full lg:w-[420px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-neutral-800 bg-neutral-900/50 lg:overflow-y-auto">
-          <div className="p-6 space-y-6">
+        <aside className="w-full lg:w-[400px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-neutral-800 bg-neutral-900/50 lg:overflow-y-auto no-scrollbar">
+          <div className="p-4 space-y-4">
 
             {/* Prompt Section */}
             <Card className="bg-neutral-800/50 border-neutral-700">
