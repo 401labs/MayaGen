@@ -35,7 +35,7 @@ const MODEL_NAMES: Record<string, string> = {
 
 export default function GalleryPage() {
   const { user } = useAuth();
-  const { filters, updateFilter, isInitialized, syncToUrl } = usePersistentFilters('gallery_filters');
+  const { filters, updateFilter, isInitialized } = usePersistentFilters('gallery_filters');
   
   const [gallery, setGallery] = useState<GalleryImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
