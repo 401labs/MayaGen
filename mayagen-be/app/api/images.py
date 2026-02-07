@@ -315,6 +315,64 @@ async def get_recent_images(
         traceback.print_exc()
         return responses.api_error(status_code=500, message="Failed to get recent images", error=str(e))
 
+
+async def calculate_queue_position(session: AsyncSession, image: Image) -> Optional[int]:
+    """
+    Calculates the position of the image in the generation queue.
+    Returns:
+        0: If currently PROCESSING
+        >0: Position in line (1 means next up)
+        None: If not in queue (COMPLETED, FAILED, etc)
+    """
+    if image.status == JobStatus.PROCESSING:
+        return 0
+    
+    if image.status != JobStatus.QUEUED:
+        return None
+
+    # 1. Count Processing (Starts at 0 or 1? If 0 is processing, line starts at 1)
+    # Actually, if I am next, waiting for the 1 processing item, am I #1 or #2?
+    # Usually #1 means "First in waiting line".
+    # So we don't count processing in the "Queue Position", but maybe we say "Behind X items".
+    # User asked for "Queue Number". (#4 approx 2 mins).
+    # If 1 is processing, and I am next, I am #1 in queue.
+    
+    # Priority Rules:
+    # 1. Single Images (batch_job_id is NULL) sorted by created_at
+    # 2. Batch Images (batch_job_id is NOT NULL) sorted by created_at
+    
+    # Count ahead in my priority group
+    if image.batch_job_id is None:
+        # I am Priority 1
+        # Count other Priority 1 images older than me
+        statement = select(func.count()).select_from(Image).where(
+            Image.status == JobStatus.QUEUED,
+            Image.batch_job_id == None,
+            Image.created_at < image.created_at
+        )
+        ahead = (await session.execute(statement)).scalar_one()
+        return ahead + 1
+        
+    else:
+        # I am Priority 2
+        # Count ALL Priority 1 images (they are all ahead)
+        statement_p1 = select(func.count()).select_from(Image).where(
+            Image.status == JobStatus.QUEUED,
+            Image.batch_job_id == None
+        )
+        p1_ahead = (await session.execute(statement_p1)).scalar_one()
+        
+        # Count Priority 2 images older than me
+        statement_p2 = select(func.count()).select_from(Image).where(
+            Image.status == JobStatus.QUEUED,
+            Image.batch_job_id != None,
+            Image.created_at < image.created_at
+        )
+        p2_ahead = (await session.execute(statement_p2)).scalar_one()
+        
+        return p1_ahead + p2_ahead + 1
+
+
 @router.get("/images/{image_id}")
 async def get_image(
     image_id: int,
@@ -345,6 +403,11 @@ async def get_image(
             safe_category = img.category.replace("\\", "/") if img.category else "uncategorized"
             url = f"{base_url}/{safe_category}/{img.filename}"
 
+        # Calculate Queue Position if needed
+        queue_pos = None
+        if img.status in [JobStatus.QUEUED, JobStatus.PROCESSING]:
+            queue_pos = await calculate_queue_position(session, img)
+
         return responses.api_success(
             message="Image Detail Retrieved",
             data={
@@ -361,7 +424,8 @@ async def get_image(
                 "created_at": img.created_at.isoformat(),
                 "created_by": user.username if user else "Anonymous",
                 "is_public": img.is_public,
-                "status": img.status
+                "status": img.status,
+                "queue_position": queue_pos
             }
         )
     except Exception as e:

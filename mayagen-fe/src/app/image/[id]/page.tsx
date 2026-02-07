@@ -27,6 +27,7 @@ interface ImageDetail {
   created_by: string;
   status: string;
   is_public: boolean;
+  queue_position?: number | null;
 }
 
 // Model Display Names
@@ -148,6 +149,7 @@ export default function ImageDetailPage() {
     );
   }
 
+  const isQueued = image.status === 'QUEUED';
   const isProcessing = image.status === 'PENDING' || image.status === 'PROCESSING';
   const isOwner = user && image && Number(user.id) === Number(image.user_id);
 
@@ -216,6 +218,28 @@ export default function ImageDetailPage() {
               <h2 className="text-2xl font-semibold text-indigo-300">Generating Masterpiece...</h2>
               <p className="text-neutral-500 max-w-md">Your image is being processed by AI. This typically takes 10-30 seconds depending on model and resolution.</p>
               <div className="flex gap-2 text-xs text-neutral-600 mt-4">
+                <span className="px-2 py-1 bg-neutral-800 rounded">{image.model}</span>
+                <span className="px-2 py-1 bg-neutral-800 rounded">{image.width}x{image.height}</span>
+              </div>
+            </div>
+          ) : isQueued ? (
+            <div className="relative z-10 flex flex-col items-center justify-center gap-6 text-center animate-pulse">
+              <div className="relative">
+                <div className="w-32 h-32 rounded-full border-4 border-yellow-500/30 flex items-center justify-center">
+                  <Clock className="w-16 h-16 text-yellow-500" />
+                </div>
+              </div>
+              <h2 className="text-2xl font-semibold text-yellow-300">Waiting in Queue...</h2>
+              <div className="flex flex-col gap-2 items-center">
+                <p className="text-neutral-400">Your image is queued for generation.</p>
+                {image.queue_position !== null && image.queue_position !== undefined && (
+                  <Badge variant="outline" className="mt-2 text-lg px-4 py-1 border-yellow-500/50 text-yellow-200 bg-yellow-900/20">
+                    Queue Position: #{image.queue_position}
+                  </Badge>
+                )}
+                <p className="text-xs text-neutral-600 mt-2">Single images are prioritized over bulk batches.</p>
+              </div>
+               <div className="flex gap-2 text-xs text-neutral-600 mt-4">
                 <span className="px-2 py-1 bg-neutral-800 rounded">{image.model}</span>
                 <span className="px-2 py-1 bg-neutral-800 rounded">{image.width}x{image.height}</span>
               </div>
