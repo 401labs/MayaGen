@@ -39,7 +39,10 @@ export default function CollectionsPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   
-  const { filters, updateFilter, isInitialized } = usePersistentFilters('collection_filters');
+  const { filters, updateFilter, isInitialized } = usePersistentFilters('collection_filters', { 
+    sortBy: 'newest', 
+    statusFilter: 'completed' 
+  });
   
   const [gallery, setGallery] = useState<GalleryImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);

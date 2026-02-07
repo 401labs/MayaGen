@@ -20,10 +20,12 @@ const DEFAULT_FILTERS: FilterState = {
   viewMode: 'grid',
 };
 
-export function usePersistentFilters(key: string) {
+export function usePersistentFilters(key: string, overrides?: Partial<FilterState>) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
+  
+  const initialState = { ...DEFAULT_FILTERS, ...overrides };
+  const [filters, setFilters] = useState<FilterState>(initialState);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // 1. Initialize from URL or SessionStorage on mount
@@ -41,11 +43,7 @@ export function usePersistentFilters(key: string) {
 
     if (hasUrlParams) {
       setFilters(prev => ({ ...prev, ...urlParams }));
-      // Sync to storage
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem(key, JSON.stringify({ ...DEFAULT_FILTERS, ...urlParams }));
-      }
-    } else {
+
       // Fallback to SessionStorage
       if (typeof window !== 'undefined') {
         const stored = sessionStorage.getItem(key);
