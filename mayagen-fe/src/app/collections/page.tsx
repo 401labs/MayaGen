@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Search, Filter, Grid, LayoutGrid, Image as ImageIcon, FolderOpen, Clock, AlertCircle, RefreshCw, Lock, Globe } from "lucide-react";
+import { Loader2, Search, Filter, Grid, LayoutGrid, Image as ImageIcon, FolderOpen, Clock, AlertCircle, RefreshCw, Lock, Globe, SortAsc, SortDesc, Circle } from "lucide-react";
 import Link from 'next/link';
 import { toast } from "sonner";
 import { useRouter } from 'next/navigation';
@@ -188,6 +188,36 @@ export default function CollectionsPage() {
                 <SelectItem value="sd15">DreamShaper 8</SelectItem>
                 <SelectItem value="lcm">SD 1.5 Base</SelectItem>
 
+              </SelectContent>
+            </Select>
+
+            {/* Status Filter */}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[140px] bg-neutral-900 border-neutral-800">
+                <Circle className="w-4 h-4 mr-2 text-neutral-500" />
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent className="bg-neutral-900 border-neutral-700 text-neutral-200">
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+                <SelectItem value="queued">Queued</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Sort Order */}
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-[140px] bg-neutral-900 border-neutral-800">
+                {sortBy === 'newest' ? (
+                  <SortDesc className="w-4 h-4 mr-2 text-neutral-500" />
+                ) : (
+                  <SortAsc className="w-4 h-4 mr-2 text-neutral-500" />
+                )}
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent className="bg-neutral-900 border-neutral-700 text-neutral-200">
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="oldest">Oldest First</SelectItem>
               </SelectContent>
             </Select>
 

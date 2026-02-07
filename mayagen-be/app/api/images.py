@@ -177,7 +177,7 @@ async def get_my_images(
             base_query = base_query.where(Image.category == category)
             
         if status and status != "all":
-             base_query = base_query.where(Image.status == status)
+             base_query = base_query.where(Image.status == status.upper())
              
         if model and model != "all":
             base_query = base_query.where(Image.model == model)
@@ -211,7 +211,7 @@ async def get_my_images(
             statement = statement.where(Image.category == category)
 
         if status and status != "all":
-             statement = statement.where(Image.status == status)
+             statement = statement.where(Image.status == status.upper())
 
         if model and model != "all":
             statement = statement.where(Image.model == model)

@@ -164,7 +164,7 @@ export default function ImageDetailPage() {
             if (from === 'batch' && batchId) {
               router.push(`/bulk/view/${batchId}`);
             } else {
-              router.push("/");
+              router.back();
             }
           }}
           variant="ghost"
