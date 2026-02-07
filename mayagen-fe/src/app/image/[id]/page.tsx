@@ -154,7 +154,7 @@ export default function ImageDetailPage() {
   const isOwner = user && image && Number(user.id) === Number(image.user_id);
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 pb-32">
+    <div className="h-screen bg-neutral-950 text-neutral-100 overflow-hidden flex flex-col">
       {/* Top Bar */}
       <header className="sticky top-0 z-50 backdrop-blur-lg bg-neutral-950/80 border-b border-neutral-800 px-6 py-3 flex items-center justify-between">
         <Button
@@ -190,7 +190,7 @@ export default function ImageDetailPage() {
         </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row min-h-[calc(100vh-57px)] lg:h-[calc(100vh-57px)]">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* Image Panel (Left) */}
         <div className="flex-1 flex items-center justify-center bg-neutral-950 relative overflow-hidden min-h-[50vh] lg:min-h-0 group">
           
