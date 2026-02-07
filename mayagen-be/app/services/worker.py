@@ -193,7 +193,9 @@ async def worker_loop():
                         SELECT id
                         FROM image
                         WHERE status = 'QUEUED'
-                        ORDER BY created_at ASC
+                        ORDER BY 
+                            CASE WHEN batch_job_id IS NULL THEN 0 ELSE 1 END ASC,
+                            created_at ASC
                         LIMIT 1
                         FOR UPDATE SKIP LOCKED
                     )
