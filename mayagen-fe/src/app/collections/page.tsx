@@ -200,6 +200,7 @@ export default function CollectionsPage() {
               <SelectContent className="bg-neutral-900 border-neutral-700 text-neutral-200">
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="processing">Processing</SelectItem>
                 <SelectItem value="failed">Failed</SelectItem>
                 <SelectItem value="queued">Queued</SelectItem>
               </SelectContent>
