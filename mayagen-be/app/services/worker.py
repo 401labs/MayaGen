@@ -222,3 +222,50 @@ async def worker_loop():
             logger.error(f"Worker Loop Error: {e}")
             await asyncio.sleep(5)
 
+
+async def reset_stuck_jobs():
+    """
+    Resets jobs stuck in PROCESSING or GENERATING state on startup.
+    This handles cases where the server crashed or was restarted during processing.
+    """
+    async with get_session_context() as session:
+        # 1. Reset stuck Images
+        statement = text("""
+            UPDATE image
+            SET status = 'QUEUED'
+            WHERE status = 'PROCESSING'
+        """)
+        result = await session.execute(statement)
+        if result.rowcount > 0:
+            logger.warning(f"Reset {result.rowcount} stuck PROCESSING images to QUEUED.")
+            
+        # 2. Reset stuck Batch Jobs
+        # If a batch job was GENERATING, it means it was in the middle of creating image records.
+        # Since the creation is atomic (all images added + status update commit), 
+        # it's possible it failed before commit.
+        # If it's GENERATING, we should check if images were created.
+        # But simpler logic: If GENERATING, set back to QUEUED to retry expansion?
+        # IMPORTANT: If we retry expansion, we might create duplicates if partial commit happened.
+        # Review `process_batch_jobs`: It commits `GENERATING` status FIRST, then creates images, then commits `QUEUED` images.
+        # If it crashes in between, we have a batch in GENERATING but no images (or partial?).
+        # `process_batch_jobs` checks `BatchJob.status == QUEUED`.
+        # If we reset GENERATING -> QUEUED, it will run again.
+        # And `process_batch_jobs` logic:
+        # `prompts = generate_prompts(...)`
+        # `for i, prompt in enumerate(prompts): ...`
+        # If we re-run, we create NEW images.
+        # We need to be careful.
+        # For now, let's just log warning for BatchJobs or set them to FAILED to require manual intervention?
+        # Or, check if images exist.
+        
+        # Safe approach for Batch: Set to FAILED with message "Server restarted during generation".
+        statement_batch = text("""
+            UPDATE batchjob
+            SET status = 'FAILED', error_message = 'Server restarted during initialization'
+            WHERE status = 'GENERATING'
+        """)
+        result_batch = await session.execute(statement_batch)
+        if result_batch.rowcount > 0:
+             logger.warning(f"Marked {result_batch.rowcount} stuck GENERATING batches as FAILED.")
+             
+        await session.commit()

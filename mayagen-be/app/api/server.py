@@ -75,6 +75,10 @@ app.mount("/images", StaticFiles(directory=config.OUTPUT_FOLDER), name="images")
 @app.on_event("startup")
 async def on_startup():
     await init_db()
+    # Reset any stuck jobs from previous run
+    from ..services.worker import reset_stuck_jobs
+    await reset_stuck_jobs()
+    
     # Start Background Worker
     asyncio.create_task(worker_loop())
 
