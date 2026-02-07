@@ -209,10 +209,12 @@ async def worker_loop():
                     job_id = row[0]
                     await session.commit() 
                     
-                    # Process as a background task so we don't block the loop from picking up others?
-                    # User request: "picks that calls the comfyui... until it gets response"
-                    # If we wait, we process 1 by 1. That seems to be the request "simple approach".
-                    await process_job(job_id)
+                    logger.info(f"Worker: Picked up Job {job_id}. Processing...")
+                    try:
+                        await process_job(job_id)
+                        logger.info(f"Worker: Finished Job {job_id}.")
+                    except Exception as e:
+                        logger.error(f"Worker: Error processing Job {job_id}: {e}")
                 else:
                     await session.commit()
                     # No jobs, sleep

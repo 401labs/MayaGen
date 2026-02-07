@@ -34,13 +34,15 @@ class ComfyUIProvider:
         with urllib.request.urlopen(f"http://{self.server_address}/history/{prompt_id}") as response:
             return json.loads(response.read())
 
-    def generate(self, prompt_text: str, output_path: str, width: int = 512, height: int = 512, workflow_path: Path = None):
+    def generate(self, prompt_text: str, output_path: str, width: int = 512, height: int = 512, workflow_path: Path = None, timeout: int = 600):
         """
         Main function to generate an image from text.
+        Timeout default: 10 minutes.
         """
         # 1. Connect first
         print(f"[ComfyUI] Connecting to {self.server_address}...")
         self.ws.connect(f"ws://{self.server_address}/ws?clientId={self.client_id}")
+        self.ws.settimeout(1.0)
         
         # 2. Load Workflow Template
         workflow = self.load_workflow(workflow_path)
@@ -51,7 +53,7 @@ class ComfyUIProvider:
            print("[ComfyUI] Updated prompt.")
 
         # 4. Inject Resolution (Scanning for EmptyLatentImage)
-        # We look for the node that creates the blank canvas
+        # ... logic for resolution ...
         found_latent = False
         for node_id, node in workflow.items():
             if node.get("class_type") == "EmptyLatentImage":
@@ -62,31 +64,41 @@ class ComfyUIProvider:
                 break
         
         if not found_latent:
-            # Fallback for SD1.5 templates where node 5 is usually it
             if "5" in workflow:
                 workflow["5"]["inputs"]["width"] = width
                 workflow["5"]["inputs"]["height"] = height
-                print(f"[ComfyUI] Updated resolution (Fallback ID 5) to {width}x{height}")
 
         # 5. Send to Queue
         prompt_response = self.queue_prompt(workflow)
         prompt_id = prompt_response['prompt_id']
-        print(f"[ComfyUI] Prompt queued: {prompt_id}")
+        print(f"[ComfyUI] Prompt queued: {prompt_id}. Waiting for execution...")
 
         # 6. Listen for Result
+        start_time = time.time()
         while True:
-            out = self.ws.recv()
-            if isinstance(out, str):
-                message = json.loads(out)
-                if message['type'] == 'executing':
-                    data = message['data']
-                    if data['node'] is None and data['prompt_id'] == prompt_id:
-                        print("[ComfyUI] Generation finished.")
-                        break # Execution is done
-            else:
-                continue # Binary data (previews), ignore
+            if time.time() - start_time > timeout:
+                self.ws.close()
+                raise TimeoutError(f"Generation timed out after {timeout} seconds")
+
+            try:
+                out = self.ws.recv()
+                if isinstance(out, str):
+                    message = json.loads(out)
+                    if message['type'] == 'executing':
+                        data = message['data']
+                        if data['node'] is None and data['prompt_id'] == prompt_id:
+                            print("[ComfyUI] Generation finished.")
+                            break # Execution is done
+                else:
+                    continue # Binary data (previews), ignore
+            except websocket.WebSocketTimeoutException:
+                continue
+            except Exception as e:
+                self.ws.close()
+                raise e
 
         # 7. Retrieve Image History
+        # ... rest of the function ...
         history = self.get_history(prompt_id)[prompt_id]
         
         # 8. Download Image
