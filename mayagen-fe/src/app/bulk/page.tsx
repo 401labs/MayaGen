@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Layers, Eye, Play, History, Globe, Lock } from "lucide-react";
+import { Loader2, Layers, Eye, Play, History, Globe, Lock, Check, X } from "lucide-react";
 import Link from 'next/link';
 import { toast } from "sonner";
 
@@ -35,12 +35,13 @@ export default function BulkGeneratePage() {
 
   // Custom Template State
   const [useCustomTemplate, setUseCustomTemplate] = useState(false);
-  const [customTemplate, setCustomTemplate] = useState("A {color} {target} {action} in {environment}, {style}, {lighting}, 8k");
+  const [customTemplate, setCustomTemplate] = useState("");
+  const [hasEditedTemplate, setHasEditedTemplate] = useState(false);
   
   // Variations - all selected by default
   const [colors, setColors] = useState<string[]>([...PRESETS.colors]);
   const [environments, setEnvironments] = useState<string[]>([...PRESETS.environments]);
-  const [actions, setActions] = useState<string[]>([...PRESETS.actions]);
+  const [actions, setActions] = useState<string[]>([]);
   const [styles, setStyles] = useState<string[]>(['photorealistic']);
   const [lighting, setLighting] = useState<string[]>([...PRESETS.lighting]);
   const [camera, setCamera] = useState<string[]>([...PRESETS.camera]);
@@ -51,6 +52,26 @@ export default function BulkGeneratePage() {
   const [isPreviewing, setIsPreviewing] = useState(false);
   
   const buildVariations = () => ({ colors, environments, actions, styles, lighting, camera });
+  
+  // Smart Template Logic
+  useEffect(() => {
+    if (activeTab === 'template' && (!hasEditedTemplate || !customTemplate.trim())) {
+      let t = "A";
+      if (colors.length > 0) t += " {color}";
+      t += " {target}";
+      if (actions.length > 0) t += " {action}";
+      if (environments.length > 0) t += " in {environment}";
+      
+      const suffixes = [];
+      if (styles.length > 0) suffixes.push("{style}");
+      if (lighting.length > 0) suffixes.push("{lighting}");
+      if (camera.length > 0) suffixes.push("{camera}");
+      suffixes.push("8k");
+      
+      if (suffixes.length > 0) t += ", " + suffixes.join(", ");
+      setCustomTemplate(t);
+    }
+  }, [activeTab, colors, environments, actions, styles, lighting, camera, hasEditedTemplate, customTemplate]);
   
   const generatePreview = async () => {
     if (!targetSubject.trim()) { toast.error("Enter a target subject"); return; }
@@ -167,7 +188,7 @@ export default function BulkGeneratePage() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 pb-24">
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 pb-48">
       {/* Header */}
       <header className="sticky top-0 z-40 backdrop-blur-lg bg-neutral-950/80 border-b border-neutral-800">
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
@@ -180,7 +201,7 @@ export default function BulkGeneratePage() {
             <Link href="/bulk/history">
               <Button variant="ghost" className="border border-neutral-700 bg-neutral-800/80 text-white hover:bg-neutral-700 hover:text-white h-10 px-6 text-sm transition-all duration-200 shadow-sm">
                 <History className="w-4 h-4 mr-2 text-indigo-400" />
-                View Batches
+                <span className="hidden md:inline">View Batches</span>
               </Button>
             </Link>
           </div>
@@ -191,24 +212,24 @@ export default function BulkGeneratePage() {
         
         {/* Tab Navigation */}
         <div className="flex items-center justify-center mb-8">
-            <div className="flex items-center bg-neutral-900/50 p-1 rounded-full border border-neutral-800">
+            <div className="flex items-center bg-neutral-900/50 p-0.5 md:p-1 rounded-full border border-neutral-800">
                 <button 
                     onClick={() => setActiveTab('config')}
-                    className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-200 ${activeTab === 'config' ? 'bg-indigo-600 text-white shadow-lg' : 'text-neutral-400 hover:text-neutral-200'}`}
+                    className={`px-3 py-1.5 md:px-6 md:py-2 rounded-full text-xs md:text-sm font-medium transition-all duration-200 ${activeTab === 'config' ? 'bg-indigo-600 text-white shadow-lg' : 'text-neutral-400 hover:text-neutral-200'}`}
                 >
                     1. Config
                 </button>
-                <div className="w-px h-4 bg-neutral-800 mx-1" />
+                <div className="w-px h-3 bg-neutral-800 mx-0.5 md:h-4 md:mx-1" />
                 <button 
                     onClick={() => setActiveTab('variations')}
-                    className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-200 ${activeTab === 'variations' ? 'bg-indigo-600 text-white shadow-lg' : 'text-neutral-400 hover:text-neutral-200'}`}
+                    className={`px-3 py-1.5 md:px-6 md:py-2 rounded-full text-xs md:text-sm font-medium transition-all duration-200 ${activeTab === 'variations' ? 'bg-indigo-600 text-white shadow-lg' : 'text-neutral-400 hover:text-neutral-200'}`}
                 >
                     2. Variations
                 </button>
-                 <div className="w-px h-4 bg-neutral-800 mx-1" />
+                 <div className="w-px h-3 bg-neutral-800 mx-0.5 md:h-4 md:mx-1" />
                 <button 
                     onClick={() => setActiveTab('template')}
-                    className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-200 ${activeTab === 'template' ? 'bg-indigo-600 text-white shadow-lg' : 'text-neutral-400 hover:text-neutral-200'}`}
+                    className={`px-3 py-1.5 md:px-6 md:py-2 rounded-full text-xs md:text-sm font-medium transition-all duration-200 ${activeTab === 'template' ? 'bg-indigo-600 text-white shadow-lg' : 'text-neutral-400 hover:text-neutral-200'}`}
                 >
                     3. Template
                 </button>
@@ -269,7 +290,7 @@ export default function BulkGeneratePage() {
                       </button>
                        <button 
                         onClick={() => setIsPublic(false)}
-                        className={`flex-1 h-11 rounded-lg border text-xs font-medium transition-all flex items-center justify-center gap-2 ${!isPublic ? 'bg-amber-500/10 border-amber-500/50 text-amber-500' : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-300'}`}
+                        className={`flex-1 h-11 rounded-lg border text-xs font-medium transition-all flex items-center justify-center gap-2 ${!isPublic ? 'bg-amber-500/10 border-amber-500/50 text-amber-500' : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-amber-400 hover:border-amber-500/30'}`}
                       >
                         <Lock className="w-3.5 h-3.5" /> Private
                       </button>
@@ -283,14 +304,26 @@ export default function BulkGeneratePage() {
         {/* Step 2: Variations */}
         {activeTab === 'variations' && (
         <section className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-           <div className="flex items-center justify-between px-2 mb-2">
+           <div className="flex flex-col md:flex-row md:items-center justify-between px-2 mb-4 gap-4">
             <div className="flex flex-col">
                 <h2 className="text-lg font-medium text-white">Define Variations</h2>
                 <p className="text-sm text-neutral-500">Select the attributes you want to mix and match.</p>
             </div>
-            <div className="flex gap-2">
-              <button onClick={selectAll} className="text-[10px] px-3 py-1.5 rounded-full bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition-colors border border-indigo-500/20 font-medium">Select All</button>
-              <button onClick={clearAll} className="text-[10px] px-3 py-1.5 rounded-full bg-neutral-800 text-neutral-400 hover:bg-neutral-700 transition-colors border border-neutral-700 font-medium">Clear</button>
+            <div className="flex gap-2 w-full md:w-auto">
+              <button 
+                onClick={selectAll} 
+                className="flex-1 md:flex-none justify-center flex items-center gap-2 text-xs px-4 py-2.5 md:py-2 md:px-3 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 transition-all border border-indigo-500/20 font-medium active:scale-95"
+              >
+                <Check className="w-3.5 h-3.5" />
+                Select All
+              </button>
+              <button 
+                onClick={clearAll} 
+                className="flex-1 md:flex-none justify-center flex items-center gap-2 text-xs px-4 py-2.5 md:py-2 md:px-3 rounded-lg bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200 transition-all border border-neutral-700 font-medium active:scale-95"
+              >
+                <X className="w-3.5 h-3.5" />
+                Clear
+              </button>
             </div>
           </div>
 
@@ -316,8 +349,8 @@ export default function BulkGeneratePage() {
                     <span className="text-lg font-medium text-white">Custom Prompt Template</span>
                     <span className="text-sm text-neutral-500">Define the exact sentence structure using your variables.</span>
                 </div>
-                 <div className={`w-14 h-8 rounded-full p-1 cursor-pointer transition-colors duration-200 ease-in-out flex items-center ${useCustomTemplate ? 'bg-indigo-600' : 'bg-neutral-800 border border-neutral-700'}`} onClick={() => setUseCustomTemplate(!useCustomTemplate)}>
-                    <div className={`w-6 h-6 bg-white rounded-full shadow-sm transform transition-transform duration-200 ease-in-out ${useCustomTemplate ? 'translate-x-6' : 'translate-x-0'}`} />
+                 <div className={`w-10 h-6 md:w-14 md:h-8 rounded-full p-1 cursor-pointer transition-colors duration-200 ease-in-out flex items-center ${useCustomTemplate ? 'bg-indigo-600' : 'bg-neutral-800 border border-neutral-700'}`} onClick={() => setUseCustomTemplate(!useCustomTemplate)}>
+                    <div className={`w-4 h-4 md:w-6 md:h-6 bg-white rounded-full shadow-sm transform transition-transform duration-200 ease-in-out ${useCustomTemplate ? 'translate-x-4 md:translate-x-6' : 'translate-x-0'}`} />
                 </div>
             </div>
 
@@ -326,7 +359,7 @@ export default function BulkGeneratePage() {
                      <div className="p-1 bg-neutral-950 rounded-xl border border-neutral-800 shadow-inner">
                         <textarea 
                             value={customTemplate}
-                            onChange={(e) => setCustomTemplate(e.target.value)}
+                            onChange={(e) => { setCustomTemplate(e.target.value); setHasEditedTemplate(true); }}
                             placeholder="e.g. A {color} {target} doing {action} in {environment}, {style} style..."
                             className="w-full h-40 bg-transparent border-none text-base text-neutral-100 focus:ring-0 outline-none resize-none placeholder:text-neutral-700 font-mono leading-relaxed p-4"
                         />
@@ -372,32 +405,40 @@ export default function BulkGeneratePage() {
         )}
 
         {/* Floating Footer Actions */}
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-neutral-900/80 backdrop-blur-xl p-2 pl-2 pr-2 rounded-full border border-neutral-700 shadow-2xl ring-1 ring-white/10">
+        <div className="fixed bottom-6 left-4 md:left-1/2 md:-translate-x-1/2 md:bottom-32 z-[60] flex items-center gap-2 md:gap-4 bg-neutral-900/80 backdrop-blur-xl p-1.5 md:p-2 pl-1.5 md:pl-2 pr-1.5 md:pr-2 rounded-full border border-neutral-700 shadow-2xl ring-1 ring-white/10">
              
              {/* Back Button */}
              <Button 
                 variant="ghost" 
                 onClick={handleBack} 
-                className={`rounded-full w-10 h-10 p-0 text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all ${activeTab === 'config' ? 'opacity-0 pointer-events-none w-0 p-0 overflow-hidden' : 'opacity-100'}`}
+                className={`rounded-full w-8 h-8 md:w-10 md:h-10 p-0 text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all ${activeTab === 'config' ? 'opacity-0 pointer-events-none w-0 p-0 overflow-hidden' : 'opacity-100'}`}
              >
                 <div className="flex items-center justify-center">←</div>
              </Button>
 
-            <div className="h-4 w-px bg-neutral-800 mx-1" />
+            <div className="h-3 w-px bg-neutral-800 mx-0.5 md:h-4 md:mx-1" />
 
-             <Button variant="ghost" onClick={generatePreview} disabled={isPreviewing || !targetSubject.trim()} className="rounded-full hover:bg-neutral-800 text-neutral-300 h-10 px-4">
-                {isPreviewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4 mr-2" />}
+             <Button variant="ghost" onClick={generatePreview} disabled={isPreviewing || !targetSubject.trim()} className="rounded-full hover:bg-neutral-800 text-neutral-300 hover:text-white h-8 px-3 text-xs md:h-10 md:px-4 md:text-sm transition-colors">
+                {isPreviewing ? <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" /> : <Eye className="hidden md:block w-3 h-3 md:w-4 md:h-4 mr-1.5 md:mr-2" />}
                 Preview
             </Button>
 
             {/* Next / Generate Button */}
             {activeTab !== 'template' ? (
-                 <Button onClick={handleNext} className="bg-white text-black hover:bg-neutral-200 rounded-full px-6 h-10 font-medium">
-                    Next Step →
-                </Button>
+                 <div className="flex items-center gap-2">
+                    {activeTab === 'variations' && (
+                        <Button onClick={createBatchJob} disabled={isLoading || !targetSubject.trim() || !category.trim()} className=" hidden md:flex bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 rounded-full h-8 px-4 text-xs md:px-5 md:h-10 md:text-sm font-medium mr-2">
+                            {isLoading ? <Loader2 className="w-3 h-3 md:w-4 md:h-4 mr-1.5 md:mr-2 animate-spin" /> : <Play className="w-3 h-3 md:w-4 md:h-4 mr-1.5 md:mr-2" />}
+                            Quick Generate
+                        </Button>
+                    )}
+                    <Button onClick={handleNext} className="bg-white text-black hover:bg-neutral-200 rounded-full h-8 px-4 text-xs md:px-6 md:h-10 md:text-sm font-medium">
+                        Next Step →
+                    </Button>
+                 </div>
             ) : (
-                 <Button onClick={createBatchJob} disabled={isLoading || !targetSubject.trim() || !category.trim()} className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-full px-8 h-10 font-medium shadow-[0_0_20px_-5px_rgba(79,70,229,0.5)]">
-                    {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
+                 <Button onClick={createBatchJob} disabled={isLoading || !targetSubject.trim() || !category.trim()} className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-full h-8 px-5 text-xs md:px-8 md:h-10 md:text-sm font-medium shadow-[0_0_20px_-5px_rgba(79,70,229,0.5)]">
+                    {isLoading ? <Loader2 className="w-3 h-3 md:w-4 md:h-4 mr-1.5 md:mr-2 animate-spin" /> : <Play className="hidden md:block w-3 h-3 md:w-4 md:h-4 mr-1.5 md:mr-2" />}
                     Generate Batch
                 </Button>
             )}
