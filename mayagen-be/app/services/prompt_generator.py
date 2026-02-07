@@ -54,8 +54,9 @@ def generate_single_prompt(
     # Fill in defaults for any missing template variables
     for key in ["color", "environment", "action", "style", "lighting", "camera"]:
         if key not in replacements:
-            default_values = DEFAULT_VARIATIONS.get(key + 's', DEFAULT_VARIATIONS.get(key, [""]))
-            replacements[key] = random.choice(default_values) if default_values else ""
+            # If the user didn't select any variations for this category, leave it blank.
+            # Do NOT force a random default.
+            replacements[key] = ""
     
     # Format the template
     try:
