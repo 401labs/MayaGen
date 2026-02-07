@@ -39,14 +39,28 @@ export default function CollectionsPage() {
   const [gallery, setGallery] = useState<GalleryImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [modelFilter, setModelFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
   const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('masonry');
   
   // Pagination State
+  // Pagination State
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const LIMIT = 24;
+
+  // Debounce Search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Extract unique categories
+  const categories = [...new Set(gallery.map(img => img.category))];
 
   // Redirect if not logged in
   useEffect(() => {
@@ -58,12 +72,24 @@ export default function CollectionsPage() {
   const fetchCollection = async (pageNum: number = 1) => {
     setIsLoading(true);
     try {
-      const res = await api.get(`/images/me?page=${pageNum}&limit=${LIMIT}`);
+      const params = new URLSearchParams({
+        page: pageNum.toString(),
+        limit: LIMIT.toString(),
+        sort_by: sortBy
+      });
+
+      if (debouncedSearch) params.append('search', debouncedSearch);
+      if (categoryFilter !== 'all') params.append('category', categoryFilter);
+      if (modelFilter !== 'all') params.append('model', modelFilter);
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+
+      const res = await api.get(`/images/me?${params.toString()}`);
       if (res.data.success) {
         setGallery(res.data.data.images);
         if (res.data.data.meta) {
           setTotalPages(res.data.data.meta.total_pages);
           setPage(res.data.data.meta.page);
+          setTotal(res.data.data.meta.total);
         }
       }
     } catch (e: any) {
@@ -76,21 +102,17 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     if (user) {
+      fetchCollection(1);
+    }
+  }, [user, debouncedSearch, categoryFilter, modelFilter, statusFilter, sortBy]);
+
+  useEffect(() => {
+    if (user) {
       fetchCollection(page);
     }
   }, [user, page]);
 
-  // Extract unique categories
-  const categories = [...new Set(gallery.map(img => img.category))];
 
-  // Filtered gallery
-  const filteredGallery = gallery.filter(img => {
-    const matchesSearch = img.prompt.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          img.filename?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || img.category === categoryFilter;
-    const matchesModel = modelFilter === 'all' || img.model === modelFilter;
-    return matchesSearch && matchesCategory && matchesModel;
-  });
 
   if (authLoading || !user) {
     return (
@@ -112,7 +134,7 @@ export default function CollectionsPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold">My Collections</h1>
-                <p className="text-xs text-neutral-500 text-left">Your personal gallery ({filteredGallery.length} items)</p>
+                <p className="text-xs text-neutral-500 text-left">Your personal gallery ({total} items)</p>
               </div>
             </div>
             
@@ -200,7 +222,7 @@ export default function CollectionsPage() {
               <div key={i} className="aspect-square rounded-xl bg-neutral-900 animate-pulse" />
             ))}
           </div>
-        ) : filteredGallery.length === 0 ? (
+        ) : gallery.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-[50vh] text-neutral-500">
             <FolderOpen className="w-16 h-16 mb-4 opacity-20" />
             <p className="text-lg mb-2">Your collection is empty</p>
@@ -210,13 +232,13 @@ export default function CollectionsPage() {
           </div>
         ) : viewMode === 'masonry' ? (
           <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-            {filteredGallery.map((img) => (
+            {gallery.map((img) => (
               <CollectionCard key={img.id} image={img} />
             ))}
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filteredGallery.map((img) => (
+            {gallery.map((img) => (
               <CollectionCard key={img.id} image={img} isSquare />
             ))}
           </div>
@@ -224,7 +246,7 @@ export default function CollectionsPage() {
       </main>
 
       {/* Pagination Controls */}
-      {!isLoading && filteredGallery.length > 0 && (
+      {!isLoading && gallery.length > 0 && (
         <PaginationControl
           currentPage={page}
           totalPages={totalPages}

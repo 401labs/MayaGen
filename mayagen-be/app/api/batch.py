@@ -243,7 +243,7 @@ async def cancel_batch_job(
         batch.status = BatchJobStatus.CANCELLED
         
         # Cancel all queued images for this batch
-        from sqlalchemy import update
+        from sqlalchemy import func, or_, update
         image_stmt = (
             update(Image)
             .where(Image.batch_job_id == batch_id)
@@ -542,6 +542,8 @@ async def get_shared_batch_images(
     token: str,
     page: int = 1,
     limit: int = 24,
+    search: Optional[str] = None,
+    sort_by: str = "newest",
     session: AsyncSession = Depends(get_session)
 ):
     """Public access to batch images via share token."""
@@ -558,20 +560,35 @@ async def get_shared_batch_images(
         base_url = config.API_BASE_URL + "/images"
         offset = (page - 1) * limit
         
+        # Base filters
+        base_filters = [
+            Image.batch_job_id == batch.id,
+            Image.status == JobStatus.COMPLETED
+        ]
+        
+        if search:
+            base_filters.append(or_(
+                Image.prompt.ilike(f"%{search}%"),
+                Image.filename.ilike(f"%{search}%")
+            ))
+
         # Get total
-        count_stmt = select(func.count()).where(Image.batch_job_id == batch.id).where(Image.status == JobStatus.COMPLETED)
+        count_stmt = select(func.count()).where(*base_filters)
         total_result = await session.execute(count_stmt)
         total = total_result.scalar_one()
         
         # Get Images (Only Completed for public view)
         statement = (
             select(Image)
-            .where(Image.batch_job_id == batch.id)
-            .where(Image.status == JobStatus.COMPLETED)
-            .order_by(Image.created_at.desc())
-            .offset(offset)
-            .limit(limit)
+            .where(*base_filters)
         )
+        
+        if sort_by == "oldest":
+            statement = statement.order_by(Image.created_at.asc())
+        else:
+            statement = statement.order_by(Image.created_at.desc())
+            
+        statement = statement.offset(offset).limit(limit)
         results = await session.execute(statement)
         images = results.scalars().all()
         

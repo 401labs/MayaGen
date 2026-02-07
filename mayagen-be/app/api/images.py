@@ -18,14 +18,19 @@ from sqlalchemy import case
 
 # ...
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 @router.get("/images")
 async def list_images(
     session: AsyncSession = Depends(get_session),
     current_user: Optional[User] = Depends(deps.get_current_user_optional), # Optional auth
     page: int = 1,
-    limit: int = 20
+    limit: int = 20,
+    search: Optional[str] = None,
+    category: Optional[str] = None,
+    status: Optional[str] = None,
+    model: Optional[str] = None,
+    sort_by: str = "newest"
 ):
     try:
         """Lists generated images. Public feed."""
@@ -37,6 +42,22 @@ async def list_images(
         # Base query for filtering
         base_query = select(Image).where(Image.is_public == True).where(Image.status == JobStatus.COMPLETED)
         
+        # Apply filters
+        if search:
+            base_query = base_query.where(or_(
+                Image.prompt.ilike(f"%{search}%"),
+                Image.filename.ilike(f"%{search}%")
+            ))
+        
+        if category and category != "all":
+            base_query = base_query.where(Image.category == category)
+            
+        if status and status != "all":
+             base_query = base_query.where(Image.status == status)
+
+        if model and model != "all":
+            base_query = base_query.where(Image.model == model)
+
         # Count total
         count_statement = select(func.count()).select_from(base_query.subquery())
         total_result = await session.execute(count_statement)
@@ -51,18 +72,36 @@ async def list_images(
             else_=5
         )
         
-        # Query DB sorted by Status Priority then Created At desc
-        # Query DB sorted by Status Priority then Created At desc
-        # Filter: Only public images AND COMPLETED
+        # Build main statement
         statement = (
             select(Image, User)
             .join(User, isouter=True)
             .where(Image.is_public == True)
             .where(Image.status == JobStatus.COMPLETED)
-            .order_by(Image.created_at.desc())
-            .offset(offset)
-            .limit(limit)
         )
+        
+        if search:
+            statement = statement.where(or_(
+                Image.prompt.ilike(f"%{search}%"),
+                Image.filename.ilike(f"%{search}%")
+            ))
+            
+        if category and category != "all":
+            statement = statement.where(Image.category == category)
+
+        if status and status != "all":
+             statement = statement.where(Image.status == status)
+             
+        if model and model != "all":
+            statement = statement.where(Image.model == model)
+            
+        # Apply Sorting
+        if sort_by == "oldest":
+            statement = statement.order_by(Image.created_at.asc())
+        else: # newest
+            statement = statement.order_by(Image.created_at.desc())
+            
+        statement = statement.offset(offset).limit(limit)
         results = await session.execute(statement)
         # Results is list of (Image, User) tuples
         
@@ -111,13 +150,37 @@ async def get_my_images(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(deps.get_current_user),
     page: int = 1,
-    limit: int = 20
+    limit: int = 20,
+    search: Optional[str] = None,
+    category: Optional[str] = None,
+    status: Optional[str] = None,
+    model: Optional[str] = None,
+    sort_by: str = "newest"
 ):
     """Get all images created by the current user (Private & Public)."""
     try:
         base_url = config.API_BASE_URL + "/images"
         
         offset = (page - 1) * limit
+
+        # Base filters
+        base_query = select(Image).where(Image.user_id == current_user.id)
+        
+        # Apply filters
+        if search:
+            base_query = base_query.where(or_(
+                Image.prompt.ilike(f"%{search}%"),
+                Image.filename.ilike(f"%{search}%")
+            ))
+        
+        if category and category != "all":
+            base_query = base_query.where(Image.category == category)
+            
+        if status and status != "all":
+             base_query = base_query.where(Image.status == status)
+             
+        if model and model != "all":
+            base_query = base_query.where(Image.model == model)
         
         # Custom sort order: COMPLETED (1), PROCESSING (2), QUEUED (3), FAILED (4)
         status_order = case(
@@ -129,17 +192,39 @@ async def get_my_images(
         )
 
         # Count total
-        count_statement = select(func.count()).where(Image.user_id == current_user.id)
+        count_statement = select(func.count()).select_from(base_query.subquery())
         total_result = await session.execute(count_statement)
         total = total_result.scalar_one()
 
         statement = (
             select(Image)
             .where(Image.user_id == current_user.id)
-            .order_by(status_order, Image.created_at.desc())
-            .offset(offset)
-            .limit(limit)
         )
+        
+        if search:
+            statement = statement.where(or_(
+                Image.prompt.ilike(f"%{search}%"),
+                Image.filename.ilike(f"%{search}%")
+            ))
+            
+        if category and category != "all":
+            statement = statement.where(Image.category == category)
+
+        if status and status != "all":
+             statement = statement.where(Image.status == status)
+
+        if model and model != "all":
+            statement = statement.where(Image.model == model)
+            
+        # Apply Sorting
+        if sort_by == "oldest":
+            statement = statement.order_by(Image.created_at.asc())
+        else:
+            # Default to newest (replacing the complex status sort for now as user requested simple sort)
+            # If we want to keep status priority for 'newest', we can, but usually filters are better for finding status.
+            statement = statement.order_by(Image.created_at.desc())
+            
+        statement = statement.offset(offset).limit(limit)
         results = await session.execute(statement)
         images = results.scalars().all()
         

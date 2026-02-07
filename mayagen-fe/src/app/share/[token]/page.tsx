@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { api } from "@/lib/api";
-import { Loader2, AlertCircle, Layers, Grid, LayoutDashboard, Download, Globe, ExternalLink } from "lucide-react";
+import { Loader2, AlertCircle, Layers, Grid, LayoutDashboard, Download, Globe, ExternalLink, Search, Clock, RefreshCw } from "lucide-react";
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
 // Types for Public View
@@ -42,6 +44,9 @@ export default function SharedBatchPage() {
   const [images, setImages] = useState<SharedImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('grid');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [sortBy, setSortBy] = useState('newest');
   
   // Pagination State
   const [page, setPage] = useState(1);
@@ -54,11 +59,17 @@ export default function SharedBatchPage() {
     }
   }, [token]);
 
+  // Debounce Search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   useEffect(() => {
     if (token && batch) {
-        fetchImages(1);
+        fetchImages(1, true);
     }
-  }, [batch]);
+  }, [batch, debouncedSearch, sortBy]);
 
   const fetchBatchData = async () => {
     try {
@@ -75,21 +86,23 @@ export default function SharedBatchPage() {
     }
   };
 
-  const fetchImages = async (pageNum: number) => {
+  const fetchImages = async (pageNum: number, reset: boolean = false) => {
     try {
       setLoadingImages(true);
-      const res = await api.get(`/batch/shared/${token}/images`, {
-        params: { page: pageNum, limit: 24 }
-      });
+      const params: any = { page: pageNum, limit: 24, sort_by: sortBy };
+      if (debouncedSearch) params.search = debouncedSearch;
+
+      const res = await api.get(`/batch/shared/${token}/images`, { params });
       
       if (res.data.success) {
-        if (pageNum === 1) {
+        if (reset || pageNum === 1) {
             setImages(res.data.data.images);
+            setPage(1);
         } else {
             setImages(prev => [...prev, ...res.data.data.images]);
+            setPage(pageNum);
         }
         setTotalPages(res.data.data.meta.total_pages);
-        setPage(pageNum);
       }
     } catch (e) {
       console.error("Failed to load images", e);

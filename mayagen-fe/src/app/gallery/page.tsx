@@ -37,8 +37,11 @@ export default function GalleryPage() {
   const [gallery, setGallery] = useState<GalleryImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all'); // Kept for consistency, though public feed is usually COMPLETED
   const [modelFilter, setModelFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
   const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('masonry');
 
   // Pagination State
@@ -46,22 +49,30 @@ export default function GalleryPage() {
   const [totalPages, setTotalPages] = useState(1);
   const LIMIT = 24; // Images per page
 
+  // Debounce Search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // Extract unique categories (Note: This only extracts from current page, practically distinct categories should come from a separate API or pre-defined list, but for now we keep as is)
   const categories = [...new Set(gallery.map(img => img.category))];
-
-  // Filtered gallery (Client-side filtering for search - ideally search should be server side too but we keep hybrid for now)
-  const filteredGallery = gallery.filter(img => {
-    const matchesSearch = img.prompt.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      img.filename.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || img.category === categoryFilter;
-    const matchesModel = modelFilter === 'all' || img.model === modelFilter;
-    return matchesSearch && matchesCategory && matchesModel;
-  });
 
   const fetchGallery = async (pageNum: number = 1) => {
     setIsLoading(true);
     try {
-      const res = await api.get(`/images?page=${pageNum}&limit=${LIMIT}`);
+      const params = new URLSearchParams({
+        page: pageNum.toString(),
+        limit: LIMIT.toString(),
+        sort_by: sortBy
+      });
+      
+      if (debouncedSearch) params.append('search', debouncedSearch);
+      if (categoryFilter !== 'all') params.append('category', categoryFilter);
+      if (modelFilter !== 'all') params.append('model', modelFilter); // Note: Backend needs to support model filter too if not already
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+
+      const res = await api.get(`/images?${params.toString()}`);
       if (res.data.success) {
         setGallery(res.data.data.images);
         // Handle Meta
@@ -79,8 +90,12 @@ export default function GalleryPage() {
   };
 
   useEffect(() => {
+    fetchGallery(1);
+  }, [debouncedSearch, categoryFilter, modelFilter, statusFilter, sortBy]);
+
+  useEffect(() => {
     fetchGallery(page);
-  }, [page]); // Re-run when page changes
+  }, [page]);
 
   // Reset page when filters change? 
   // Ideally, but since filtering is client-side for currently fetched batch, it behaves oddly.
@@ -160,6 +175,36 @@ export default function GalleryPage() {
               </SelectContent>
             </Select>
 
+            {/* Status Filter */}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full md:w-[160px] bg-neutral-900 border-neutral-800">
+                <div className="flex items-center truncate">
+                  <AlertCircle className="w-4 h-4 mr-2 text-neutral-500 flex-shrink-0" />
+                  <SelectValue placeholder="Status" />
+                </div>
+              </SelectTrigger>
+              <SelectContent className="bg-neutral-900 border-neutral-700 text-neutral-200">
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+                <SelectItem value="processing">Processing</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Sort By */}
+            <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-[140px] bg-neutral-900 border-neutral-800">
+                  <div className="flex items-center truncate">
+                    <Clock className="w-4 h-4 mr-2 text-neutral-500 flex-shrink-0" />
+                    <SelectValue placeholder="Sort By" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent className="bg-neutral-900 border-neutral-700 text-neutral-200">
+                  <SelectItem value="newest">Newest First</SelectItem>
+                  <SelectItem value="oldest">Oldest First</SelectItem>
+                </SelectContent>
+              </Select>
+
             {/* View Toggle */}
             <div className="hidden md:flex items-center gap-1 bg-neutral-900 rounded-lg p-1 border border-neutral-800 ml-auto md:ml-0">
               <Button
@@ -191,12 +236,12 @@ export default function GalleryPage() {
               <div key={i} className="aspect-square rounded-xl bg-neutral-900 animate-pulse" />
             ))}
           </div>
-        ) : filteredGallery.length === 0 ? (
+        ) : gallery.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-[50vh] text-neutral-500">
             <ImageIcon className="w-16 h-16 mb-4 opacity-20" />
             <p className="text-lg mb-2">No images found</p>
             <p className="text-sm opacity-50">
-              {searchQuery || categoryFilter !== 'all' || modelFilter !== 'all'
+              {searchQuery || categoryFilter !== 'all' || modelFilter !== 'all' || statusFilter !== 'all'
                 ? "Try adjusting your filters"
                 : "No images on this page"}
             </p>
@@ -206,14 +251,14 @@ export default function GalleryPage() {
             {viewMode === 'masonry' ? (
               // Masonry Layout
               <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-                {filteredGallery.map((img) => (
+                {gallery.map((img) => (
                   <GalleryCard key={img.id} image={img} />
                 ))}
               </div>
             ) : (
               // Grid Layout
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {filteredGallery.map((img) => (
+                {gallery.map((img) => (
                   <GalleryCard key={img.id} image={img} isSquare />
                 ))}
               </div>
@@ -222,7 +267,7 @@ export default function GalleryPage() {
         )}
 
         {/* Pagination Controls */}
-        {!isLoading && filteredGallery.length > 0 && (
+        {!isLoading && gallery.length > 0 && (
           <PaginationControl
             currentPage={page}
             totalPages={totalPages}
