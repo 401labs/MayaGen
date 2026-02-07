@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ export default function BulkGeneratePage() {
   const [useCustomTemplate, setUseCustomTemplate] = useState(false);
   const [customTemplate, setCustomTemplate] = useState("");
   const [hasEditedTemplate, setHasEditedTemplate] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   // Variations - all selected by default
   const [colors, setColors] = useState<string[]>([...PRESETS.colors]);
@@ -71,7 +72,7 @@ export default function BulkGeneratePage() {
       if (suffixes.length > 0) t += ", " + suffixes.join(", ");
       setCustomTemplate(t);
     }
-  }, [activeTab, colors, environments, actions, styles, lighting, camera, hasEditedTemplate, customTemplate]);
+  }, [activeTab, colors, environments, actions, styles, lighting, camera]);
   
   const generatePreview = async () => {
     if (!targetSubject.trim()) { toast.error("Enter a target subject"); return; }
@@ -164,7 +165,24 @@ export default function BulkGeneratePage() {
   ].filter(v => v.show).map(v => v.label);
 
   const insertVariable = (variable: string) => {
-    setCustomTemplate(prev => prev + " " + variable);
+    if (textareaRef.current) {
+        const start = textareaRef.current.selectionStart;
+        const end = textareaRef.current.selectionEnd;
+        const text = customTemplate;
+        const newText = text.substring(0, start) + variable + text.substring(end);
+        setCustomTemplate(newText);
+        setHasEditedTemplate(true);
+        // Defer focus to ensure state update doesn't eat it, though standard React usually handles this.
+        setTimeout(() => {
+            if (textareaRef.current) {
+                textareaRef.current.focus();
+                textareaRef.current.setSelectionRange(start + variable.length, start + variable.length);
+            }
+        }, 0);
+    } else {
+        setCustomTemplate(prev => prev + " " + variable);
+        setHasEditedTemplate(true);
+    }
   };
   
   if (authLoading) return <div className="min-h-screen flex items-center justify-center bg-neutral-950"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>;
@@ -242,7 +260,10 @@ export default function BulkGeneratePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-neutral-900/30 p-8 rounded-2xl border border-neutral-800/50 shadow-sm">
             <div className="space-y-5">
                <div className="space-y-2">
-                <label className="text-xs font-medium text-neutral-300 ml-1 uppercase tracking-wide">Project Name</label>
+                <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-neutral-300 ml-1 uppercase tracking-wide">Project Name</label>
+                    <span className="text-[10px] text-neutral-500 italic lowercase tracking-normal">(for your reference)</span>
+                </div>
                 <Input placeholder="e.g. Summer Collection" value={name} onChange={(e) => setName(e.target.value)} className="bg-neutral-950 border-neutral-800 h-11 text-sm focus-visible:ring-indigo-500/50 text-neutral-100 placeholder:text-neutral-600" />
               </div>
               
@@ -252,7 +273,10 @@ export default function BulkGeneratePage() {
               </div>
 
                <div className="space-y-2">
-                <label className="text-xs font-medium text-neutral-300 ml-1 uppercase tracking-wide">Target Subject <span className="text-indigo-400">*</span></label>
+                <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-neutral-300 ml-1 uppercase tracking-wide">Object of Interest <span className="text-indigo-400">*</span></label>
+                    <span className="text-[10px] text-neutral-500 ml-1">The main subject you want to focus on (e.g. "A futuristic car")</span>
+                </div>
                 <Input placeholder="e.g. A cute scottish fold cat" value={targetSubject} onChange={(e) => setTargetSubject(e.target.value)} className="bg-neutral-950 border-neutral-800 h-11 text-sm focus-visible:ring-indigo-500/50 text-neutral-100 placeholder:text-neutral-600" />
               </div>
             </div>
@@ -358,6 +382,7 @@ export default function BulkGeneratePage() {
                  <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                      <div className="p-1 bg-neutral-950 rounded-xl border border-neutral-800 shadow-inner">
                         <textarea 
+                            ref={textareaRef}
                             value={customTemplate}
                             onChange={(e) => { setCustomTemplate(e.target.value); setHasEditedTemplate(true); }}
                             placeholder="e.g. A {color} {target} doing {action} in {environment}, {style} style..."
