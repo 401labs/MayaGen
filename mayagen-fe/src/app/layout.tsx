@@ -69,6 +69,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://mayagen.app"),
 };
 
+import { MobileWarning } from "@/components/ui/mobile-warning";
 import { AuthProvider } from "@/context/AuthContext";
 import { AppDock } from "@/components/layout/AppDock";
 
@@ -84,6 +85,7 @@ export default function RootLayout({
       >
         <AuthProvider>
           {children}
+          <MobileWarning />
           <AppDock />
           <Toaster theme="dark" position="bottom-right" richColors />
         </AuthProvider>
