@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { api } from "@/lib/api";
-import { Loader2, AlertCircle, Layers, Grid, LayoutDashboard, Download, Globe, ExternalLink, Search, Clock, RefreshCw } from "lucide-react";
+import { Loader2, AlertCircle, Layers, Grid, LayoutGrid, Download, Globe, ExternalLink, Search, Clock, RefreshCw } from "lucide-react";
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -166,14 +166,14 @@ export default function SharedBatchPage() {
                             className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-400 hover:text-neutral-300'}`}
                             title="Grid View"
                         >
-                            <LayoutDashboard className="w-4 h-4" />
+                            <Grid className="w-4 h-4" />
                         </button>
                         <button 
                             onClick={() => setViewMode('masonry')}
                             className={`p-1.5 rounded-md transition-all ${viewMode === 'masonry' ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-400 hover:text-neutral-300'}`}
                             title="Masonry View"
                         >
-                            <Grid className="w-4 h-4" />
+                            <LayoutGrid className="w-4 h-4" />
                         </button>
                     </div>
                 </div>

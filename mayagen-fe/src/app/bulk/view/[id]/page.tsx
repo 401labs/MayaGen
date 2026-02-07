@@ -53,7 +53,7 @@ export default function BatchViewPage() {
   const [batch, setBatch] = useState<BatchJob | null>(null);
   const [images, setImages] = useState<BatchImage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('masonry');
+  const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('grid');
   
   // Pagination State
   const [page, setPage] = useState(1);

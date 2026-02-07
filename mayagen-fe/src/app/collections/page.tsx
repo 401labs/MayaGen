@@ -13,6 +13,8 @@ import { toast } from "sonner";
 import { useRouter } from 'next/navigation';
 import { PaginationControl } from "@/components/ui/pagination-control";
 
+import { usePersistentFilters } from '@/hooks/usePersistentFilters';
+
 interface GalleryImage {
   id: number;
   url: string;
@@ -36,17 +38,23 @@ const MODEL_NAMES: Record<string, string> = {
 export default function CollectionsPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  
+  const { filters, updateFilter, isInitialized } = usePersistentFilters('collection_filters');
+  
   const [gallery, setGallery] = useState<GalleryImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [modelFilter, setModelFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
-  const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('masonry');
   
-  // Pagination State
+  // Local search state
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Sync local search term
+  useEffect(() => {
+    if (isInitialized) {
+      setSearchTerm(filters.searchQuery || '');
+    }
+  }, [isInitialized, filters.searchQuery]);
+
+
   // Pagination State
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -55,9 +63,15 @@ export default function CollectionsPage() {
 
   // Debounce Search
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 500);
+    if (!isInitialized) return;
+    const timer = setTimeout(() => {
+      if (searchTerm !== filters.searchQuery) {
+        updateFilter({ searchQuery: searchTerm });
+        setPage(1);
+      }
+    }, 500);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchTerm, isInitialized, filters.searchQuery, updateFilter]);
 
   // Extract unique categories
   const categories = [...new Set(gallery.map(img => img.category))];
@@ -70,18 +84,19 @@ export default function CollectionsPage() {
   }, [user, authLoading, router]);
 
   const fetchCollection = async (pageNum: number = 1) => {
+    if (!isInitialized) return;
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
         page: pageNum.toString(),
         limit: LIMIT.toString(),
-        sort_by: sortBy
+        sort_by: filters.sortBy
       });
 
-      if (debouncedSearch) params.append('search', debouncedSearch);
-      if (categoryFilter !== 'all') params.append('category', categoryFilter);
-      if (modelFilter !== 'all') params.append('model', modelFilter);
-      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (filters.searchQuery) params.append('search', filters.searchQuery);
+      if (filters.categoryFilter !== 'all') params.append('category', filters.categoryFilter);
+      if (filters.modelFilter !== 'all') params.append('model', filters.modelFilter);
+      if (filters.statusFilter !== 'all') params.append('status', filters.statusFilter);
 
       const res = await api.get(`/images/me?${params.toString()}`);
       if (res.data.success) {
@@ -101,16 +116,24 @@ export default function CollectionsPage() {
   };
 
   useEffect(() => {
-    if (user) {
-      fetchCollection(1);
-    }
-  }, [user, debouncedSearch, categoryFilter, modelFilter, statusFilter, sortBy]);
-
-  useEffect(() => {
-    if (user) {
+    if (user && isInitialized) {
       fetchCollection(page);
     }
-  }, [user, page]);
+  }, [
+    user, 
+    page, 
+    isInitialized,
+    filters.searchQuery, 
+    filters.categoryFilter, 
+    filters.modelFilter, 
+    filters.statusFilter, 
+    filters.sortBy
+  ]);
+
+  const handleFilterChange = (key: string, value: string) => {
+      updateFilter({ [key]: value });
+      setPage(1);
+  };
 
 
 
@@ -158,13 +181,13 @@ export default function CollectionsPage() {
               <Input
                 placeholder="Search your generations..."
                 className="pl-9 bg-neutral-900 border-neutral-800 focus:border-indigo-500"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
 
             {/* Category Filter */}
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <Select value={filters.categoryFilter} onValueChange={(val) => handleFilterChange('categoryFilter', val)}>
               <SelectTrigger className="w-[160px] bg-neutral-900 border-neutral-800">
                 <FolderOpen className="w-4 h-4 mr-2 text-neutral-500" />
                 <SelectValue placeholder="Category" />
@@ -178,7 +201,7 @@ export default function CollectionsPage() {
             </Select>
 
             {/* Model Filter */}
-            <Select value={modelFilter} onValueChange={setModelFilter}>
+            <Select value={filters.modelFilter} onValueChange={(val) => handleFilterChange('modelFilter', val)}>
               <SelectTrigger className="w-[160px] bg-neutral-900 border-neutral-800">
                 <Filter className="w-4 h-4 mr-2 text-neutral-500" />
                 <SelectValue placeholder="Model" />
@@ -192,7 +215,7 @@ export default function CollectionsPage() {
             </Select>
 
             {/* Status Filter */}
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={filters.statusFilter} onValueChange={(val) => handleFilterChange('statusFilter', val)}>
               <SelectTrigger className="w-[140px] bg-neutral-900 border-neutral-800">
                 <Circle className="w-4 h-4 mr-2 text-neutral-500" />
                 <SelectValue placeholder="Status" />
@@ -207,9 +230,9 @@ export default function CollectionsPage() {
             </Select>
 
             {/* Sort Order */}
-            <Select value={sortBy} onValueChange={setSortBy}>
+            <Select value={filters.sortBy} onValueChange={(val) => handleFilterChange('sortBy', val)}>
               <SelectTrigger className="w-[140px] bg-neutral-900 border-neutral-800">
-                {sortBy === 'newest' ? (
+                {filters.sortBy === 'newest' ? (
                   <SortDesc className="w-4 h-4 mr-2 text-neutral-500" />
                 ) : (
                   <SortAsc className="w-4 h-4 mr-2 text-neutral-500" />
@@ -227,16 +250,16 @@ export default function CollectionsPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                className={`h-8 w-8 ${viewMode === 'masonry' ? 'bg-neutral-800' : ''}`}
-                onClick={() => setViewMode('masonry')}
+                className={`h-8 w-8 ${filters.viewMode === 'masonry' ? 'bg-neutral-800' : ''}`}
+                onClick={() => updateFilter({ viewMode: 'masonry' })}
               >
                 <LayoutGrid className="w-4 h-4" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className={`h-8 w-8 ${viewMode === 'grid' ? 'bg-neutral-800' : ''}`}
-                onClick={() => setViewMode('grid')}
+                className={`h-8 w-8 ${filters.viewMode === 'grid' ? 'bg-neutral-800' : ''}`}
+                onClick={() => updateFilter({ viewMode: 'grid' })}
               >
                 <Grid className="w-4 h-4" />
               </Button>
@@ -261,7 +284,7 @@ export default function CollectionsPage() {
               Start generating images to build your personal gallery
             </p>
           </div>
-        ) : viewMode === 'masonry' ? (
+        ) : filters.viewMode === 'masonry' ? (
           <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
             {gallery.map((img) => (
               <CollectionCard key={img.id} image={img} />

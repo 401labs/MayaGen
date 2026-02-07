@@ -11,6 +11,7 @@ import { PaginationControl } from "@/components/ui/pagination-control";
 import { Loader2, Search, Filter, Grid, LayoutGrid, Image as ImageIcon, User, Calendar, Sparkles, FolderOpen, Clock, AlertCircle, RefreshCw } from "lucide-react";
 import Link from 'next/link';
 import { toast } from "sonner";
+import { usePersistentFilters } from '@/hooks/usePersistentFilters';
 
 interface GalleryImage {
   id: number;
@@ -34,48 +35,63 @@ const MODEL_NAMES: Record<string, string> = {
 
 export default function GalleryPage() {
   const { user } = useAuth();
+  const { filters, updateFilter, isInitialized, syncToUrl } = usePersistentFilters('gallery_filters');
+  
   const [gallery, setGallery] = useState<GalleryImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all'); // Kept for consistency, though public feed is usually COMPLETED
-  const [modelFilter, setModelFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
-  const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('masonry');
+  
+  // Local search state for input field (debounced update to filters)
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Sync local search term with filters when initialized
+  useEffect(() => {
+    if (isInitialized) {
+      setSearchTerm(filters.searchQuery || '');
+    }
+  }, [isInitialized, filters.searchQuery]);
+
 
   // Pagination State
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const LIMIT = 24; // Images per page
 
-  // Debounce Search
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 500);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  // Extract unique categories (Note: This only extracts from current page, practically distinct categories should come from a separate API or pre-defined list, but for now we keep as is)
+  // Extract unique categories
   const categories = [...new Set(gallery.map(img => img.category))];
 
+  // Debounce Search -> Update Filters
+  useEffect(() => {
+    if (!isInitialized) return;
+    const timer = setTimeout(() => {
+      if (searchTerm !== filters.searchQuery) {
+        updateFilter({ searchQuery: searchTerm });
+        setPage(1); // Reset to page 1 on search
+        // syncToUrl({ ...filters, searchQuery: searchTerm }); // updateFilter does this implicitly via hook logic if we added it, 
+        // but hook updateFilter does NOT sync URL in my implementation above? 
+        // Wait, my hook implementation DOES update URL in updateFilter.
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm, isInitialized, filters.searchQuery, updateFilter]);
+
   const fetchGallery = async (pageNum: number = 1) => {
+    if (!isInitialized) return;
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
         page: pageNum.toString(),
         limit: LIMIT.toString(),
-        sort_by: sortBy
+        sort_by: filters.sortBy
       });
       
-      if (debouncedSearch) params.append('search', debouncedSearch);
-      if (categoryFilter !== 'all') params.append('category', categoryFilter);
-      if (modelFilter !== 'all') params.append('model', modelFilter); // Note: Backend needs to support model filter too if not already
-      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (filters.searchQuery) params.append('search', filters.searchQuery);
+      if (filters.categoryFilter !== 'all') params.append('category', filters.categoryFilter);
+      if (filters.modelFilter !== 'all') params.append('model', filters.modelFilter);
+      if (filters.statusFilter !== 'all') params.append('status', filters.statusFilter);
 
       const res = await api.get(`/images?${params.toString()}`);
       if (res.data.success) {
         setGallery(res.data.data.images);
-        // Handle Meta
         if (res.data.data.meta) {
           setTotalPages(res.data.data.meta.total_pages);
           setPage(res.data.data.meta.page);
@@ -89,19 +105,22 @@ export default function GalleryPage() {
     }
   };
 
+  // Fetch when filters change or page changes
   useEffect(() => {
-    fetchGallery(1);
-  }, [debouncedSearch, categoryFilter, modelFilter, statusFilter, sortBy]);
+    if (isInitialized) {
+      fetchGallery(page);
+    }
+  }, [page, filters, isInitialized]); 
+  // Note: 'filters' object changes identity on update, triggering fetch. 
+  // 'page' changes trigger fetch.
+  // If filters change, we often want to reset page to 1.
+  // We handled page 1 reset in the search effect.
+  // For other filters, we should wrap their setters.
 
-  useEffect(() => {
-    fetchGallery(page);
-  }, [page]);
-
-  // Reset page when filters change? 
-  // Ideally, but since filtering is client-side for currently fetched batch, it behaves oddly.
-  // For proper implementation, search/filter should be server params. 
-  // Retaining current behavior (client filter on current page) is minimal impact but confusing.
-  // Let's keep it simple: Pagination fetches new data. Filters filter THAT data.
+  const handleFilterChange = (key: string, value: string) => {
+      updateFilter({ [key]: value });
+      setPage(1);
+  };
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 pb-24">
@@ -138,13 +157,13 @@ export default function GalleryPage() {
               <Input
                 placeholder="Search prompt on this page..."
                 className="pl-9 bg-neutral-900 border-neutral-800 focus:border-indigo-500 w-full"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
 
             {/* Category Filter */}
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <Select value={filters.categoryFilter} onValueChange={(val) => handleFilterChange('categoryFilter', val)}>
               <SelectTrigger className="w-full md:w-[160px] bg-neutral-900 border-neutral-800">
                 <div className="flex items-center truncate">
                   <FolderOpen className="w-4 h-4 mr-2 text-neutral-500 flex-shrink-0" />
@@ -160,7 +179,7 @@ export default function GalleryPage() {
             </Select>
 
             {/* Model Filter */}
-            <Select value={modelFilter} onValueChange={setModelFilter}>
+            <Select value={filters.modelFilter} onValueChange={(val) => handleFilterChange('modelFilter', val)}>
               <SelectTrigger className="w-full md:w-[160px] bg-neutral-900 border-neutral-800">
                 <div className="flex items-center truncate">
                   <Filter className="w-4 h-4 mr-2 text-neutral-500 flex-shrink-0" />
@@ -176,7 +195,7 @@ export default function GalleryPage() {
             </Select>
 
             {/* Status Filter */}
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={filters.statusFilter} onValueChange={(val) => handleFilterChange('statusFilter', val)}>
               <SelectTrigger className="w-full md:w-[160px] bg-neutral-900 border-neutral-800">
                 <div className="flex items-center truncate">
                   <AlertCircle className="w-4 h-4 mr-2 text-neutral-500 flex-shrink-0" />
@@ -192,7 +211,7 @@ export default function GalleryPage() {
             </Select>
 
             {/* Sort By */}
-            <Select value={sortBy} onValueChange={setSortBy}>
+            <Select value={filters.sortBy} onValueChange={(val) => handleFilterChange('sortBy', val)}>
                 <SelectTrigger className="w-[140px] bg-neutral-900 border-neutral-800">
                   <div className="flex items-center truncate">
                     <Clock className="w-4 h-4 mr-2 text-neutral-500 flex-shrink-0" />
@@ -210,16 +229,16 @@ export default function GalleryPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                className={`h-8 w-8 ${viewMode === 'masonry' ? 'bg-neutral-800' : ''}`}
-                onClick={() => setViewMode('masonry')}
+                className={`h-8 w-8 ${filters.viewMode === 'masonry' ? 'bg-neutral-800' : ''}`}
+                onClick={() => updateFilter({ viewMode: 'masonry' })}
               >
                 <LayoutGrid className="w-4 h-4" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className={`h-8 w-8 ${viewMode === 'grid' ? 'bg-neutral-800' : ''}`}
-                onClick={() => setViewMode('grid')}
+                className={`h-8 w-8 ${filters.viewMode === 'grid' ? 'bg-neutral-800' : ''}`}
+                onClick={() => updateFilter({ viewMode: 'grid' })}
               >
                 <Grid className="w-4 h-4" />
               </Button>
@@ -241,14 +260,14 @@ export default function GalleryPage() {
             <ImageIcon className="w-16 h-16 mb-4 opacity-20" />
             <p className="text-lg mb-2">No images found</p>
             <p className="text-sm opacity-50">
-              {searchQuery || categoryFilter !== 'all' || modelFilter !== 'all' || statusFilter !== 'all'
+              {filters.searchQuery || filters.categoryFilter !== 'all' || filters.modelFilter !== 'all' || filters.statusFilter !== 'all'
                 ? "Try adjusting your filters"
                 : "No images on this page"}
             </p>
           </div>
         ) : (
           <>
-            {viewMode === 'masonry' ? (
+            {filters.viewMode === 'masonry' ? (
               // Masonry Layout
               <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
                 {gallery.map((img) => (

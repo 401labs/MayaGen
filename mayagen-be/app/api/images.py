@@ -40,7 +40,7 @@ async def list_images(
         offset = (page - 1) * limit
         
         # Base query for filtering
-        base_query = select(Image).where(Image.is_public == True).where(Image.status == JobStatus.COMPLETED)
+        base_query = select(Image).where(Image.is_public == True)
         
         # Apply filters
         if search:
@@ -53,7 +53,9 @@ async def list_images(
             base_query = base_query.where(Image.category == category)
             
         if status and status != "all":
-             base_query = base_query.where(Image.status == status)
+             base_query = base_query.where(Image.status == status.upper())
+        else:
+             base_query = base_query.where(Image.status == JobStatus.COMPLETED)
 
         if model and model != "all":
             base_query = base_query.where(Image.model == model)
@@ -77,7 +79,6 @@ async def list_images(
             select(Image, User)
             .join(User, isouter=True)
             .where(Image.is_public == True)
-            .where(Image.status == JobStatus.COMPLETED)
         )
         
         if search:
@@ -90,7 +91,9 @@ async def list_images(
             statement = statement.where(Image.category == category)
 
         if status and status != "all":
-             statement = statement.where(Image.status == status)
+             statement = statement.where(Image.status == status.upper())
+        else:
+             statement = statement.where(Image.status == JobStatus.COMPLETED)
              
         if model and model != "all":
             statement = statement.where(Image.model == model)
