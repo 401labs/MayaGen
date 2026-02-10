@@ -10,6 +10,10 @@ from ..database import get_session
 from ..models import User
 from .deps import get_current_user
 from ..helpers import api_response_helper as responses
+from ..models import ActivityLog
+from ..services.geoip import get_location_from_ip
+from fastapi import Request
+from datetime import datetime
 
 from pydantic import BaseModel, EmailStr
 
@@ -50,6 +54,7 @@ async def register(
 
 @router.post("/token")
 async def login_for_access_token(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: AsyncSession = Depends(get_session)
 ):
@@ -66,9 +71,36 @@ async def login_for_access_token(
         
     # Create Token
     access_token_expires = timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES)
+    # Include uid and role in token for middleware/frontend
     access_token = security.create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.username, "uid": user.id, "role": user.role}, expires_delta=access_token_expires
     )
+    
+    # Log Activity
+    try:
+        ip = request.client.host
+        if request.headers.get("X-Forwarded-For"):
+            ip = request.headers.get("X-Forwarded-For").split(",")[0]
+        
+        location = await get_location_from_ip(ip) if ip else "Unknown"
+        user_agent = request.headers.get("User-Agent")
+        
+        log = ActivityLog(
+            user_id=user.id,
+            action="LOGIN",
+            method="POST",
+            endpoint="/api/v1/auth/token",
+            ip_address=ip,
+            location=location,
+            user_agent=user_agent,
+            timestamp=datetime.utcnow()
+        )
+        session.add(log)
+        await session.commit()
+    except Exception as e:
+        # Don't fail login if logging fails
+        print(f"Failed to log login activity: {e}")
+
     return responses.api_success(
         message="Login Successful",
         data={"access_token": access_token, "token_type": "bearer"}
@@ -82,6 +114,7 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
             "id": current_user.id,
             "username": current_user.username,
             "email": current_user.email,
+            "role": current_user.role,
             "created_at": current_user.created_at.isoformat()
         }
     )

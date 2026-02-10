@@ -1,4 +1,4 @@
-from app.cli import run_batch_generation
+from app.cli import main
 
 if __name__ == "__main__":
-    run_batch_generation()
+    main()

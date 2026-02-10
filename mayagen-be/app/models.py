@@ -23,11 +23,15 @@ class User(SQLModel, table=True):
     username: str = Field(index=True, unique=True)
     email: str = Field(index=True, unique=True)
     hashed_password: str
+    role: str = Field(default="user")  # "user" or "admin"
+    phone_number: Optional[str] = None
+    location: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     # Relationships
     images: List["Image"] = Relationship(back_populates="user")
     batch_jobs: List["BatchJob"] = Relationship(back_populates="user")
+    activity_logs: List["ActivityLog"] = Relationship(back_populates="user")
 
 class Image(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -100,3 +104,24 @@ class BatchJob(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+    images: List["Image"] = Relationship(back_populates="batch_job")
+    
+    error_message: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ActivityLog(SQLModel, table=True):
+    """Tracks user actions and metadata."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    action: str = Field(index=True)  # e.g., "LOGIN", "GENERATE_IMAGE"
+    method: Optional[str] = None  # GET, POST
+    endpoint: Optional[str] = None  # /api/v1/generate
+    ip_address: Optional[str] = None
+    location: Optional[str] = None  # GeoIP
+    user_agent: Optional[str] = None
+    details: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSONB))
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    
+    user: Optional[User] = Relationship(back_populates="activity_logs")

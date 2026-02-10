@@ -13,6 +13,9 @@ import {
   Settings,
   Layers,
   History,
+  Activity,
+  Users,
+  ShieldCheck,
 } from "lucide-react";
 
 export function AppDock() {
@@ -72,7 +75,32 @@ export function AppDock() {
         },
       ];
 
-  const items = [...baseItems, ...authItems];
+  let items = [...baseItems];
+  if (user) {
+    if (user.role === "admin") {
+      const adminItems = [
+        {
+          title: "User Management",
+          icon: <Users className="h-full w-full text-purple-400" />,
+          href: "/admin/users",
+        },
+        {
+          title: "Activity Logs",
+          icon: <Activity className="h-full w-full text-indigo-400" />,
+          href: "/admin/activity",
+        },
+        {
+          title: "Verify Images",
+          icon: <ShieldCheck className="h-full w-full text-red-500" />,
+          href: "/admin/images",
+        },
+      ];
+      items = [...items, ...adminItems];
+    }
+    items = [...items, ...authItems];
+  } else {
+    items = [...items, ...authItems];
+  }
 
   // On mobile, FloatingDock handles its own positioning via mobileClassName.
   // We only need the wrapper for desktop centering.
