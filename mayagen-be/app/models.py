@@ -125,3 +125,18 @@ class ActivityLog(SQLModel, table=True):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     
     user: Optional[User] = Relationship(back_populates="activity_logs")
+
+class BlockedIP(SQLModel, table=True):
+    """Tracks blocked IP addresses for security and moderation."""
+    __tablename__ = "blocked_ip"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    ip_address: str = Field(index=True, unique=True, max_length=45)
+    reason: Optional[str] = None
+    blocked_by_user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    blocked_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: Optional[datetime] = None
+    is_active: bool = Field(default=True, index=True)
+    
+    # Relationship
+    blocked_by: Optional[User] = Relationship()

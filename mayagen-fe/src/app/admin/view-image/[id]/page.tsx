@@ -100,10 +100,17 @@ export default function AdminImageDetailPage() {
     if (!image) return;
 
     try {
-      // TODO: Implement toggle visibility endpoint
-      toast.info("Visibility toggle coming soon");
-    } catch (error) {
-      toast.error("Failed to update visibility");
+      const res = await api.patch(`/admin/images/${image.id}/visibility`);
+      
+      if (res.data.success) {
+        const newVisibility = res.data.data.is_public;
+        setImage({ ...image, is_public: newVisibility });
+        toast.success(`Image is now ${newVisibility ? 'public' : 'private'}`);
+      }
+    } catch (error: any) {
+      console.error("Failed to update visibility", error);
+      const errorMsg = error.response?.data?.message || "Failed to update visibility";
+      toast.error(errorMsg);
     }
   };
 

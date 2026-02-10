@@ -137,6 +137,26 @@ async def list_all_images(
     
     return responses.api_success(message="All images retrieved", data={"items": response_list, "total": total})
 
+@router.patch("/images/{image_id}/visibility")
+async def toggle_image_visibility(
+    image_id: int,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(get_current_admin_user)
+):
+    """Toggle image public/private visibility."""
+    image = await session.get(Image, image_id)
+    if not image:
+        return responses.api_error(status_code=404, message="Image not found")
+    
+    # Toggle visibility
+    image.is_public = not image.is_public
+    await session.commit()
+    
+    return responses.api_success(
+        message=f"Image visibility updated to {'public' if image.is_public else 'private'}",
+        data={"id": image_id, "is_public": image.is_public}
+    )
+
 @router.delete("/images/{image_id}")
 async def delete_image(
     image_id: int,
@@ -163,3 +183,170 @@ async def delete_image(
     await session.commit()
     
     return responses.api_success(message="Image deleted successfully", data={"id": image_id})
+
+# --- IP Blocking Management ---
+
+from ..models import BlockedIP
+from pydantic import BaseModel
+
+class BlockIPRequest(BaseModel):
+    ip_address: str
+    reason: Optional[str] = None
+    expires_hours: Optional[int] = None  # Optional temporary block
+
+@router.post("/block-ip")
+async def block_ip(
+    request: BlockIPRequest,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(get_current_admin_user)
+):
+    """Block an IP address from accessing the platform."""
+    # Check if IP is already blocked
+    query = select(BlockedIP).where(BlockedIP.ip_address == request.ip_address)
+    result = await session.execute(query)
+    existing_block = result.scalar_one_or_none()
+    
+    if existing_block:
+        if existing_block.is_active:
+            return responses.api_error(status_code=400, message="IP is already blocked")
+        else:
+            # Reactivate existing block
+            existing_block.is_active = True
+            existing_block.reason = request.reason
+            existing_block.blocked_by_user_id = admin.id
+            existing_block.blocked_at = datetime.utcnow()
+            if request.expires_hours:
+                from datetime import timedelta
+                existing_block.expires_at = datetime.utcnow() + timedelta(hours=request.expires_hours)
+            else:
+                existing_block.expires_at = None
+            await session.commit()
+            return responses.api_success(message="IP block reactivated", data={"ip_address": request.ip_address})
+    
+    # Create new block
+    expires_at = None
+    if request.expires_hours:
+        from datetime import timedelta
+        expires_at = datetime.utcnow() + timedelta(hours=request.expires_hours)
+    
+    blocked_ip = BlockedIP(
+        ip_address=request.ip_address,
+        reason=request.reason,
+        blocked_by_user_id=admin.id,
+        expires_at=expires_at
+    )
+    
+    session.add(blocked_ip)
+    await session.commit()
+    await session.refresh(blocked_ip)
+    
+    return responses.api_success(message="IP blocked successfully", data={
+        "id": blocked_ip.id,
+        "ip_address": blocked_ip.ip_address,
+        "reason": blocked_ip.reason,
+        "expires_at": blocked_ip.expires_at.isoformat() if blocked_ip.expires_at else None
+    })
+
+@router.delete("/block-ip/{ip_address}")
+async def unblock_ip(
+    ip_address: str,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(get_current_admin_user)
+):
+    """Unblock an IP address."""
+    query = select(BlockedIP).where(
+        BlockedIP.ip_address == ip_address,
+        BlockedIP.is_active == True
+    )
+    result = await session.execute(query)
+    blocked_ip = result.scalar_one_or_none()
+    
+    if not blocked_ip:
+        return responses.api_error(status_code=404, message="Active block not found for this IP")
+    
+    # Deactivate the block
+    blocked_ip.is_active = False
+    await session.commit()
+    
+    return responses.api_success(message="IP unblocked successfully", data={"ip_address": ip_address})
+
+@router.get("/blocked-ips")
+async def list_blocked_ips(
+    skip: int = 0,
+    limit: int = 50,
+    include_inactive: bool = False,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(get_current_admin_user)
+):
+    """List all blocked IPs."""
+    # Base query
+    base_query = select(BlockedIP)
+    if not include_inactive:
+        base_query = base_query.where(BlockedIP.is_active == True)
+    
+    # Get total count
+    from sqlalchemy import func as sql_func
+    count_query = select(sql_func.count()).select_from(BlockedIP)
+    if not include_inactive:
+        count_query = count_query.where(BlockedIP.is_active == True)
+    total_result = await session.execute(count_query)
+    total = total_result.scalar()
+    
+    # Fetch blocked IPs
+    query = base_query.order_by(desc(BlockedIP.blocked_at)).offset(skip).limit(limit)
+    result = await session.execute(query)
+    blocked_ips = result.scalars().all()
+    
+    # Format response
+    response_list = []
+    for block in blocked_ips:
+        response_list.append({
+            "id": block.id,
+            "ip_address": block.ip_address,
+            "reason": block.reason,
+            "blocked_by_user_id": block.blocked_by_user_id,
+            "blocked_at": block.blocked_at.isoformat() if block.blocked_at else None,
+            "expires_at": block.expires_at.isoformat() if block.expires_at else None,
+            "is_active": block.is_active
+        })
+    
+    return responses.api_success(message="Blocked IPs retrieved", data={"items": response_list, "total": total})
+
+@router.get("/users/{user_id}/ips")
+async def get_user_ips(
+    user_id: int,
+    limit: int = 10,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(get_current_admin_user)
+):
+    """Get recent IP addresses used by a specific user."""
+    # Query activity logs for unique IPs
+    query = (
+        select(ActivityLog.ip_address, func.max(ActivityLog.timestamp).label("last_seen"))
+        .where(ActivityLog.user_id == user_id, ActivityLog.ip_address.isnot(None))
+        .group_by(ActivityLog.ip_address)
+        .order_by(desc("last_seen"))
+        .limit(limit)
+    )
+    
+    result = await session.execute(query)
+    ip_records = result.all()
+    
+    # Format response and check if IPs are blocked
+    response_list = []
+    for ip, last_seen in ip_records:
+        # Check if blocked
+        block_query = select(BlockedIP).where(
+            BlockedIP.ip_address == ip,
+            BlockedIP.is_active == True
+        )
+        block_result = await session.execute(block_query)
+        is_blocked = block_result.scalar_one_or_none() is not None
+        
+        response_list.append({
+            "ip_address": ip,
+            "last_seen": last_seen.isoformat() if last_seen else None,
+            "is_blocked": is_blocked
+        })
+    
+    return responses.api_success(message="User IPs retrieved", data={"user_id": user_id, "ips": response_list})
