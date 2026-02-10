@@ -31,7 +31,13 @@ uv run main.py create-admin
 
 This command connects to the database (handling potential connection issues automatically) and:
 1. Ensures the `role` column exists in the `user` table.
-2. Promotes the first registered user to `admin`.
+2. Promotes the first registered user to `admin` by default.
+
+**To Promote a Specific User:**
+If you want to promote a specific user ID (e.g., ID 5) instead of the first user:
+```bash
+uv run main.py create-admin --id 5
+```
 
 ### 📂 Files Modified
 - **Backend**:

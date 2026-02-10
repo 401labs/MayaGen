@@ -102,11 +102,16 @@ def cmd_create_admin(args):
                 conn.rollback()
                 print(f"[Warning] Checked role column: {e}")
 
-            # 2. Promote first user to admin
-            print("[System] Promoting first user to ADMIN...")
+            # 2. Promote user to admin
+            print("[System] Identifying target user...")
             try:
-                # Find first user
-                result = conn.execute(text("SELECT id, username FROM \"user\" ORDER BY id ASC LIMIT 1"))
+                if hasattr(args, "user_id") and args.user_id:
+                    print(f"[System] Looking up User ID: {args.user_id}")
+                    result = conn.execute(text(f"SELECT id, username FROM \"user\" WHERE id={args.user_id}"))
+                else:
+                    print("[System] No User ID provided. Defaulting to FIRST user...")
+                    result = conn.execute(text("SELECT id, username FROM \"user\" ORDER BY id ASC LIMIT 1"))
+
                 user = result.fetchone()
                 
                 if user:
@@ -142,7 +147,8 @@ def main():
     parser_gen.set_defaults(func=cmd_generate)
 
     # Create Admin Command
-    parser_admin = subparsers.add_parser("create-admin", help="Promote the first user to Admin")
+    parser_admin = subparsers.add_parser("create-admin", help="Promote a user to Admin")
+    parser_admin.add_argument("--id", type=int, dest="user_id", help="Specific User ID to promote")
     parser_admin.set_defaults(func=cmd_create_admin)
 
     args = parser.parse_args()
