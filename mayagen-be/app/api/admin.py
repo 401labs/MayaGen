@@ -1,7 +1,7 @@
 
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import select, col, desc
+from sqlmodel import select, col, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_session
 from ..models import User, Image, ActivityLog
@@ -19,7 +19,12 @@ async def list_users(
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(get_current_admin_user)
 ):
-    query = select(User).offset(skip).limit(limit)
+    # Get Total Count
+    count_query = select(func.count()).select_from(User)
+    total_result = await session.execute(count_query)
+    total = total_result.scalar()
+
+    query = select(User).order_by(User.id).offset(skip).limit(limit)
     result = await session.execute(query)
     users = result.scalars().all()
     
@@ -32,7 +37,7 @@ async def list_users(
         
     return responses.api_success(
         message="Users retrieved",
-        data=users_data
+        data={"items": users_data, "total": total}
     )
 
 @router.patch("/users/{user_id}/role")
@@ -70,14 +75,20 @@ async def list_activity(
     admin: User = Depends(get_current_admin_user)
 ):
     query = select(ActivityLog).order_by(desc(ActivityLog.timestamp))
+    count_query = select(func.count()).select_from(ActivityLog)
+    
     if user_id:
         query = query.where(ActivityLog.user_id == user_id)
+        count_query = count_query.where(ActivityLog.user_id == user_id)
+        
+    total_result = await session.execute(count_query)
+    total = total_result.scalar()
         
     query = query.offset(skip).limit(limit)
     result = await session.execute(query)
     logs = result.scalars().all()
     
-    return responses.api_success(message="Activity logs retrieved", data=logs)
+    return responses.api_success(message="Activity logs retrieved", data={"items": logs, "total": total})
 
 # --- Image Management ---
 
@@ -88,10 +99,15 @@ async def list_all_images(
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(get_current_admin_user)
 ):
+    # Get Total Count
+    count_query = select(func.count()).select_from(Image)
+    total_result = await session.execute(count_query)
+    total = total_result.scalar()
+
     # Fetch all images regardless of user, ensuring admin visibility
     query = select(Image).order_by(desc(Image.created_at)).offset(skip).limit(limit)
     result = await session.execute(query)
     images = result.scalars().all()
     
-    return responses.api_success(message="All images retrieved", data=images)
+    return responses.api_success(message="All images retrieved", data={"items": images, "total": total})
 
