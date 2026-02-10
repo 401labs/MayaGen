@@ -5,6 +5,7 @@ from sqlmodel import select, col, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_session
 from ..models import User, Image, ActivityLog
+from ..core import config
 from .deps import get_current_admin_user
 from ..helpers import api_response_helper as responses
 
@@ -109,5 +110,56 @@ async def list_all_images(
     result = await session.execute(query)
     images = result.scalars().all()
     
-    return responses.api_success(message="All images retrieved", data={"items": images, "total": total})
+    # Format response with URLs like collections API
+    base_url = config.API_BASE_URL + "/images"
+    response_list = []
+    for img in images:
+        # Construct output_path from category and filename
+        safe_category = img.category.replace("\\", "/") if img.category else "uncategorized"
+        output_path = f"{safe_category}/{img.filename}" if img.filename else None
+        url = f"{base_url}/{output_path}" if output_path else None
+        
+        response_list.append({
+            "id": img.id,
+            "user_id": img.user_id,
+            "filename": img.filename,
+            "category": img.category,
+            "url": url,
+            "output_path": output_path,
+            "prompt": img.prompt,
+            "model": img.model,
+            "width": img.width,
+            "height": img.height,
+            "status": img.status,
+            "is_public": img.is_public,
+            "created_at": img.created_at.isoformat() if img.created_at else None
+        })
+    
+    return responses.api_success(message="All images retrieved", data={"items": response_list, "total": total})
 
+@router.delete("/images/{image_id}")
+async def delete_image(
+    image_id: int,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(get_current_admin_user)
+):
+    # Fetch the image
+    image = await session.get(Image, image_id)
+    if not image:
+        return responses.api_error(status_code=404, message="Image not found")
+    
+    # Delete physical file
+    import os
+    from pathlib import Path
+    file_path = Path(config.OUTPUT_FOLDER) / image.output_path
+    if file_path.exists():
+        try:
+            os.remove(file_path)
+        except Exception as e:
+            print(f"Failed to delete file {file_path}: {e}")
+    
+    # Delete from database
+    await session.delete(image)
+    await session.commit()
+    
+    return responses.api_success(message="Image deleted successfully", data={"id": image_id})

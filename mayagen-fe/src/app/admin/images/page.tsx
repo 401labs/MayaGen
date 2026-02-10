@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, API_BASE_URL } from "@/lib/api";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { PaginationControl } from "@/components/ui/pagination-control";
@@ -13,6 +13,7 @@ interface Image {
   id: number;
   user_id: number;
   prompt: string;
+  url: string;
   output_path: string;
   created_at: string;
 }
@@ -27,6 +28,10 @@ export default function ImagesAdminPage() {
   const [totalPages, setTotalPages] = useState(1);
   const LIMIT = 20;
 
+  // Delete Modal State
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [imageToDelete, setImageToDelete] = useState<Image | null>(null);
+
   const fetchImages = async (page: number) => {
     setLoading(true);
     try {
@@ -35,6 +40,10 @@ export default function ImagesAdminPage() {
       
       if (res.data.success) {
          // Backend returns { items: [...], total: N }
+        console.log("Images loaded:", res.data.data.items.length);
+        if (res.data.data.items.length > 0) {
+          console.log("Sample image URL:", res.data.data.items[0].url);
+        }
         setImages(res.data.data.items);
         setTotalPages(Math.ceil(res.data.data.total / LIMIT));
       }
@@ -50,9 +59,35 @@ export default function ImagesAdminPage() {
     fetchImages(currentPage);
   }, [currentPage]);
 
-  // TODO: Implement Delete when backend supports it
-  const handleDelete = (id: number) => {
-    toast.info("Delete functionality coming soon via Admin API");
+  const handleDelete = (img: Image) => {
+    setImageToDelete(img);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!imageToDelete) return;
+
+    try {
+      const res = await api.delete(`/admin/images/${imageToDelete.id}`);
+      
+      if (res.data.success) {
+        toast.success("Image deleted successfully");
+        setDeleteModalOpen(false);
+        setImageToDelete(null);
+        // Refresh the current page
+        fetchImages(currentPage);
+      }
+    } catch (error: any) {
+      console.error("Failed to delete image", error);
+      const errorMsg = error.response?.data?.message || "Failed to delete image";
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    console.error("Image failed to load:", e.currentTarget.src);
+    e.currentTarget.style.display = "none";
+    // Show alt text instead
   };
 
   return (
@@ -83,9 +118,10 @@ export default function ImagesAdminPage() {
             <div key={img.id} className="group relative aspect-square bg-neutral-900 rounded-xl overflow-hidden border border-neutral-800 hover:border-pink-500/50 transition-all shadow-sm hover:shadow-lg hover:shadow-pink-500/10">
               {/* Image */}
               <img
-                src={`${API_BASE_URL}/images/${img.output_path}`}
+                src={img.url}
                 alt={img.prompt}
                 loading="lazy"
+                onError={handleImageError}
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
               />
               
@@ -107,7 +143,7 @@ export default function ImagesAdminPage() {
                     {/* Actions */}
                     <div className="grid grid-cols-2 gap-2 mt-2">
                        <a 
-                          href={`${API_BASE_URL}/images/${img.output_path}`} 
+                          href={img.url} 
                           target="_blank"
                           rel="noreferrer"
                           className="flex items-center justify-center h-8 bg-white/10 hover:bg-white/20 rounded text-white transition-colors"
@@ -116,9 +152,9 @@ export default function ImagesAdminPage() {
                           <ExternalLink className="w-3.5 h-3.5" />
                        </a>
                        <button 
-                          onClick={() => handleDelete(img.id)}
+                          onClick={() => handleDelete(img)}
                           className="flex items-center justify-center h-8 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors"
-                          title="Delete (Coming Soon)"
+                          title="Delete Image"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                        </button>
@@ -138,6 +174,44 @@ export default function ImagesAdminPage() {
           onPageChange={setCurrentPage}
           isLoading={loading}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && imageToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setDeleteModalOpen(false)}>
+          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-red-500/10 rounded-lg">
+                <Trash2 className="w-6 h-6 text-red-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-white mb-2">Delete Image?</h3>
+                <p className="text-sm text-neutral-400 mb-4">
+                  Are you sure you want to delete this image? This action cannot be undone.
+                </p>
+                <div className="bg-neutral-800/50 rounded-lg p-3 mb-4">
+                  <p className="text-xs text-neutral-500 mb-1">Prompt:</p>
+                  <p className="text-sm text-neutral-300 line-clamp-2">{imageToDelete.prompt}</p>
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setDeleteModalOpen(false)}
+                    className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition-colors text-sm font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDelete}
+                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
