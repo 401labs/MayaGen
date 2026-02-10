@@ -115,7 +115,11 @@ export default function ImagesAdminPage() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {images.map((img) => (
-            <div key={img.id} className="group relative aspect-square bg-neutral-900 rounded-xl overflow-hidden border border-neutral-800 hover:border-pink-500/50 transition-all shadow-sm hover:shadow-lg hover:shadow-pink-500/10">
+            <Link 
+              key={img.id} 
+              href={`/admin/view-image/${img.id}`}
+              className="group relative aspect-square bg-neutral-900 rounded-xl overflow-hidden border border-neutral-800 hover:border-pink-500/50 transition-all shadow-sm hover:shadow-lg hover:shadow-pink-500/10 cursor-pointer"
+            >
               {/* Image */}
               <img
                 src={img.url}
@@ -161,7 +165,7 @@ export default function ImagesAdminPage() {
                     </div>
                  </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
