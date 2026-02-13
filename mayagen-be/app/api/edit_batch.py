@@ -308,12 +308,17 @@ async def get_edit_batch_images(
 
 
 @router.delete("/edit-batch/{batch_id}")
-async def cancel_edit_batch_job(
+async def delete_edit_batch_job(
     batch_id: int,
+    force: bool = False,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(deps.get_current_user)
 ):
-    """Cancel an edit batch job (only if QUEUED or GENERATING)."""
+    """
+    Delete or Cancel an edit batch job.
+    - If status is QUEUED/GENERATING and force=False: Cancels the job.
+    - If status is COMPLETED/FAILED/CANCELLED or force=True: Hard deletes job and all generated variations.
+    """
     try:
         statement = select(EditBatchJob).where(
             EditBatchJob.id == batch_id,
@@ -325,33 +330,64 @@ async def cancel_edit_batch_job(
         if not batch:
             return responses.api_error(status_code=404, message="Not Found", error="Edit batch job not found")
         
-        if batch.status not in [BatchJobStatus.QUEUED, BatchJobStatus.GENERATING]:
-            return responses.api_error(
-                status_code=400,
-                message="Cannot Cancel",
-                error=f"Cannot cancel edit batch job with status: {batch.status}"
+        # Cancellation Logic
+        is_active = batch.status in [BatchJobStatus.QUEUED, BatchJobStatus.GENERATING]
+        
+        if is_active and not force:
+            batch.status = BatchJobStatus.CANCELLED
+            
+            # Cancel all queued images for this batch
+            from sqlalchemy import update
+            image_stmt = (
+                update(Image)
+                .where(Image.edit_batch_job_id == batch_id)
+                .where(Image.status == JobStatus.QUEUED)
+                .values(status=JobStatus.CANCELLED)
             )
+            await session.execute(image_stmt)
+            await session.commit()
+            
+            return responses.api_success(
+                message="Edit batch job cancelled",
+                data={"id": batch.id, "status": batch.status}
+            )
+            
+        # Hard Delete Logic
+        # 1. Get generated images (NOT the original image)
+        images_stmt = select(Image).where(Image.edit_batch_job_id == batch_id)
+        images_result = await session.execute(images_stmt)
+        images = images_result.scalars().all()
         
-        batch.status = BatchJobStatus.CANCELLED
+        # 2. Delete files from disk
+        base_path = config.OUTPUT_FOLDER # "synthetic_dataset"
         
-        # Cancel all queued images for this batch
-        from sqlalchemy import update
-        image_stmt = (
-            update(Image)
-            .where(Image.edit_batch_job_id == batch_id)
-            .where(Image.status == JobStatus.QUEUED)
-            .values(status=JobStatus.CANCELLED)
-        )
-        await session.execute(image_stmt)
+        deleted_files_count = 0
+        for img in images:
+            if img.filename and img.category:
+                file_path = os.path.join(base_path, img.category, img.filename)
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                        deleted_files_count += 1
+                    except Exception as e:
+                        print(f"Error deleting file {file_path}: {e}")
+                        
+        # 3. Delete Image Records
+        for img in images:
+            await session.delete(img)
+            
+        # 4. Delete Batch Record
+        await session.delete(batch)
         
         await session.commit()
         
         return responses.api_success(
-            message="Edit batch job cancelled",
-            data={"id": batch.id, "status": batch.status}
+            message="Edit batch job and files deleted completely",
+            data={"id": batch_id, "deleted_files": deleted_files_count}
         )
+
     except Exception as e:
-        return responses.api_error(status_code=500, message="Failed to cancel edit batch job", error=str(e))
+        return responses.api_error(status_code=500, message="Failed to delete edit batch job", error=str(e))
 
 
 # ==========================================

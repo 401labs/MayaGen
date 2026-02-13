@@ -216,12 +216,17 @@ async def preview_batch_prompts(
 
 
 @router.delete("/batch/{batch_id}")
-async def cancel_batch_job(
+async def delete_batch_job(
     batch_id: int,
+    force: bool = False,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(deps.get_current_user)
 ):
-    """Cancel a batch job (only if QUEUED or GENERATING)."""
+    """
+    Delete or Cancel a batch job.
+    - If status is QUEUED/GENERATING and force=False: Cancels the job.
+    - If status is COMPLETED/FAILED/CANCELLED or force=True: Hard deletes job and all images.
+    """
     try:
         statement = select(BatchJob).where(
             BatchJob.id == batch_id,
@@ -233,33 +238,74 @@ async def cancel_batch_job(
         if not batch:
             return responses.api_error(status_code=404, message="Not Found", error="Batch job not found")
         
-        if batch.status not in [BatchJobStatus.QUEUED, BatchJobStatus.GENERATING]:
-            return responses.api_error(
-                status_code=400,
-                message="Cannot Cancel",
-                error=f"Cannot cancel batch job with status: {batch.status}"
+        # cancellation Logic (Soft Delete / Stop)
+        is_active = batch.status in [BatchJobStatus.QUEUED, BatchJobStatus.GENERATING]
+        
+        if is_active and not force:
+            # Cancel Logic
+            batch.status = BatchJobStatus.CANCELLED
+            
+            # Cancel all queued images
+            from sqlalchemy import update
+            image_stmt = (
+                update(Image)
+                .where(Image.batch_job_id == batch_id)
+                .where(Image.status == JobStatus.QUEUED)
+                .values(status=JobStatus.CANCELLED)
             )
+            await session.execute(image_stmt)
+            await session.commit()
+            
+            return responses.api_success(
+                message="Batch job cancelled",
+                data={"id": batch.id, "status": batch.status}
+            )
+            
+        # Hard Delete Logic
+        # 1. Get all images
+        images_stmt = select(Image).where(Image.batch_job_id == batch_id)
+        images_result = await session.execute(images_stmt)
+        images = images_result.scalars().all()
         
-        batch.status = BatchJobStatus.CANCELLED
+        # 2. Delete files from disk
+        # We need to be careful. Typically images are in `synthetic_dataset/{category}/{filename}`
+        # If we delete the file, we should check if other records use it (unlikely for batch gen, but good practice).
+        # For now, we assume 1:1 mapping for generated images.
         
-        # Cancel all queued images for this batch
-        from sqlalchemy import func, or_, update
-        image_stmt = (
-            update(Image)
-            .where(Image.batch_job_id == batch_id)
-            .where(Image.status == JobStatus.QUEUED)
-            .values(status=JobStatus.CANCELLED)
-        )
-        await session.execute(image_stmt)
+        base_path = config.OUTPUT_FOLDER # "synthetic_dataset"
+        
+        deleted_files_count = 0
+        for img in images:
+            if img.filename and img.category:
+                # Construct path (careful with separators)
+                # category might trigger directory traversal check if we were accepting input, but this is from DB
+                file_path = os.path.join(base_path, img.category, img.filename)
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                        deleted_files_count += 1
+                    except Exception as e:
+                        print(f"Error deleting file {file_path}: {e}")
+                        
+        # 3. Delete Image Records
+        # SQLAlchemy cascade might handle this if configured, but explicit is safer here
+        for img in images:
+            await session.delete(img)
+            
+        # 4. Delete Batch Record
+        await session.delete(batch)
         
         await session.commit()
         
         return responses.api_success(
-            message="Batch job cancelled",
-            data={"id": batch.id, "status": batch.status}
+            message="Batch job and files deleted completely",
+            data={"id": batch_id, "deleted_files": deleted_files_count}
         )
+
     except Exception as e:
-        return responses.api_error(status_code=500, message="Failed to cancel batch job", error=str(e))
+        # import traceback
+        # traceback.print_exc()
+        return responses.api_error(status_code=500, message="Failed to delete batch job", error=str(e))
 
 
 @router.get("/batch/presets")

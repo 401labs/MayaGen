@@ -27,6 +27,7 @@ export default function BulkEditHistoryPage() {
   const [batches, setBatches] = useState<EditBatchJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancelId, setCancelId] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   useEffect(() => {
     if (user) fetchBatches();
@@ -63,6 +64,25 @@ export default function BulkEditHistoryPage() {
     e.preventDefault();
     e.stopPropagation();
     setCancelId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await api.delete(`/edit-batch/${deleteId}?force=true`);
+      toast.success('Batch and files deleted');
+      fetchBatches();
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Failed to delete');
+    } finally {
+      setDeleteId(null);
+    }
+  };
+
+  const promptDelete = (id: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDeleteId(id);
   };
 
   const getStatusBadgeStyle = (status: string) => {
@@ -204,6 +224,16 @@ export default function BulkEditHistoryPage() {
                           <button
                             onClick={(e) => promptCancel(batch.id, e)}
                             className="p-2 rounded-lg text-neutral-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                            title="Cancel Processing"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {['completed', 'failed', 'cancelled'].includes(batch.status.toLowerCase()) && (
+                          <button
+                            onClick={(e) => promptDelete(batch.id, e)}
+                            className="p-2 rounded-lg text-neutral-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                            title="Delete Project (Permanent)"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -223,7 +253,7 @@ export default function BulkEditHistoryPage() {
       {/* Cancel Confirmation */}
       {cancelId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#0a0a0a] border border-white/10 rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-[#0a0a0a] border border-white/10 rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="flex flex-col items-center text-center">
               <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6">
                 <AlertCircle className="w-8 h-8 text-red-500" />
@@ -240,6 +270,33 @@ export default function BulkEditHistoryPage() {
               </Button>
               <Button onClick={confirmCancel} className="h-12 rounded-2xl bg-red-600 hover:bg-red-700 font-bold">
                 Yes, Stop
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      {deleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#0a0a0a] border border-white/10 rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6">
+                <Trash2 className="w-8 h-8 text-red-500" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">Delete Project?</h3>
+              <p className="text-neutral-500 mb-8 text-sm leading-relaxed">
+                Are you sure you want to permanently delete this project and all its variations?
+                <br/><span className="text-red-400 font-bold">This cannot be undone.</span>
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <Button onClick={() => setDeleteId(null)} variant="outline" className="h-12 rounded-2xl border-white/10 hover:bg-white/5">
+                Cancel
+              </Button>
+              <Button onClick={confirmDelete} className="h-12 rounded-2xl bg-red-600 hover:bg-red-700 font-bold">
+                Yes, Delete
               </Button>
             </div>
           </div>

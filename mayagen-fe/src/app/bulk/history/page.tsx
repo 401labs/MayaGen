@@ -42,6 +42,7 @@ export default function BatchHistoryPage() {
   }, [user]);
 
   const [cancelId, setCancelId] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const fetchBatches = async () => {
     setLoading(true);
@@ -92,6 +93,25 @@ export default function BatchHistoryPage() {
     e.preventDefault();
     e.stopPropagation();
     setCancelId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await api.delete(`/batch/${deleteId}?force=true`);
+      toast.success('Batch and images deleted');
+      fetchBatches();
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || 'Failed to delete');
+    } finally {
+      setDeleteId(null);
+    }
+  };
+
+  const promptDelete = (id: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDeleteId(id);
   };
 
   const getStatusIcon = (status: string) => {
@@ -250,6 +270,17 @@ export default function BatchHistoryPage() {
                          <Trash2 className="w-4 h-4" />
                        </button>
                      )}
+
+                     {/* Delete Button for Terminal States */}
+                     {['completed', 'failed', 'cancelled'].includes(batch.status) && (
+                       <button
+                         onClick={(e) => promptDelete(batch.id, e)}
+                         className="p-1.5 rounded-md text-neutral-500 hover:text-red-400 hover:bg-neutral-800 transition-all group-hover:bg-neutral-800"
+                         title="Delete Batch (Permanent)"
+                       >
+                         <Trash2 className="w-4 h-4" />
+                       </button>
+                     )}
                   </div>
                 </div>
 
@@ -296,6 +327,34 @@ export default function BatchHistoryPage() {
               </Button>
               <Button onClick={confirmCancel} className="bg-red-600 hover:bg-red-700 text-white border-red-600">
                 Yes, Cancel Batch
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-red-500/10 rounded-full">
+                <Trash2 className="w-6 h-6 text-red-500" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">Delete Batch?</h3>
+            </div>
+            
+            <p className="text-neutral-400 mb-6 text-sm">
+              Are you sure you want to permanently delete this batch and all its images? 
+              <span className="block mt-2 text-red-400 font-medium">This action cannot be undone.</span>
+            </p>
+            
+            <div className="flex justify-end gap-3">
+              <Button onClick={() => setDeleteId(null)} className="bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700">
+                Cancel
+              </Button>
+              <Button onClick={confirmDelete} className="bg-red-600 hover:bg-red-700 text-white border-red-600">
+                Yes, Delete Everything
               </Button>
             </div>
           </div>
