@@ -25,11 +25,24 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const data = await response.json();
     const image = data.data;
 
-    const imageUrl = image.url || `${API_BASE_URL.replace("/api/v1", "")}/outputs/${image.category}/${image.filename}`;
-    const title = `${image.prompt.substring(0, 60)}... | MayaGen`;
-    const description = image.prompt.length > 160 
+    // CRITICAL: OG images MUST be absolute URLs with full domain for social media crawlers
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://mayagen.fun";
+    
+    // Construct absolute image URL
+    let imageUrl: string;
+    if (image.url && image.url.startsWith("http")) {
+      // Already absolute URL
+      imageUrl = image.url;
+    } else {
+      // Construct from backend outputs
+      const safe_category = image.category?.replace(/\\/g, "/") || "uncategorized";
+      imageUrl = `${baseUrl}/api/images/${safe_category}/${image.filename}`;
+    }
+    
+    const title = image.prompt?.substring(0, 60) + "... | MayaGen" || "AI Generated Image | MayaGen";
+    const description = image.prompt?.length > 160 
       ? `${image.prompt.substring(0, 157)}...` 
-      : image.prompt;
+      : (image.prompt || "AI-generated image created with MayaGen");
 
     return {
       title,
@@ -40,13 +53,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         images: [
           {
             url: imageUrl,
-            width: image.width,
-            height: image.height,
-            alt: image.prompt,
+            width: image.width || 512,
+            height: image.height || 512,
+            alt: image.prompt || "AI Generated Image",
           },
         ],
         type: "website",
         siteName: "MayaGen",
+        url: `${baseUrl}/image/${id}`,
       },
       twitter: {
         card: "summary_large_image",
