@@ -401,7 +401,7 @@ export default function BulkEditViewPage() {
                 className="bg-neutral-950 border-neutral-800 text-neutral-300"
               />
             </div>
-            <Button size="sm" size="icon" onClick={copyShareLink} className="bg-indigo-600 hover:bg-indigo-500">
+            <Button size="icon" onClick={copyShareLink} className="bg-indigo-600 hover:bg-indigo-500">
               <Copy className="h-4 w-4" />
             </Button>
           </div>
