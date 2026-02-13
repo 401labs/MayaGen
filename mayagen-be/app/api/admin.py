@@ -309,12 +309,20 @@ async def delete_image(
     # Delete physical file
     import os
     from pathlib import Path
-    file_path = Path(config.OUTPUT_FOLDER) / image.output_path
+    
+    # Construct path manually as output_path is not a DB column
+    safe_cat = image.category.replace("\\", "/") if image.category else "uncategorized"
+    output_path = f"{safe_cat}/{image.filename}"
+    file_path = Path(config.OUTPUT_FOLDER) / output_path
+    
     if file_path.exists():
         try:
             os.remove(file_path)
+            print(f"Deleted file {file_path}")
         except Exception as e:
             print(f"Failed to delete file {file_path}: {e}")
+    else:
+        print(f"File not found at {file_path}, deleting DB record only.")
     
     # Delete from database
     await session.delete(image)

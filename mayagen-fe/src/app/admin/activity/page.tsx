@@ -104,7 +104,7 @@ export default function ActivityAdminPage() {
                   <tr key={log.id} className="hover:bg-neutral-800/30 transition-colors group">
                     <td className="p-4 text-neutral-500 flex items-center gap-2">
                        <Clock className="w-3.5 h-3.5 opacity-50" />
-                      {format(new Date(log.timestamp), "MMM d, HH:mm:ss")}
+                      {format(new Date(log.timestamp.endsWith("Z") ? log.timestamp : log.timestamp + "Z"), "MMM d, HH:mm:ss")}
                     </td>
                     <td className="p-4 font-mono text-neutral-300">
                        <span className="bg-neutral-800 px-1.5 py-0.5 rounded text-xs">#{log.user_id}</span>
