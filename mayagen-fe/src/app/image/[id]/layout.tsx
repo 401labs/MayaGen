@@ -6,7 +6,8 @@ interface PageProps {
   params: { id: string };
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata(props: PageProps): Promise<Metadata> {
+  const params = await props.params;
   const { id } = params;
 
   try {

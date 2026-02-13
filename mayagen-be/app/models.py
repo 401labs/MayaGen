@@ -38,6 +38,7 @@ class User(SQLModel, table=True):
     # Relationships
     images: List["Image"] = Relationship(back_populates="user")
     batch_jobs: List["BatchJob"] = Relationship(back_populates="user")
+    edit_batch_jobs: List["EditBatchJob"] = Relationship(back_populates="user")
     activity_logs: List["ActivityLog"] = Relationship(back_populates="user")
 
 class Image(SQLModel, table=True):
@@ -75,6 +76,13 @@ class Image(SQLModel, table=True):
     batch_job_id: Optional[int] = Field(default=None, foreign_key="batchjob.id")
     batch_job: Optional["BatchJob"] = Relationship(back_populates="images")
     
+    # Link to edit batch job (if part of an edit batch)
+    edit_batch_job_id: Optional[int] = Field(default=None, foreign_key="edit_batch_job.id")
+    edit_batch_job: Optional["EditBatchJob"] = Relationship(
+        back_populates="generated_images",
+        sa_relationship_kwargs={"foreign_keys": "[Image.edit_batch_job_id]"}
+    )
+    
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -107,7 +115,6 @@ class BatchJob(SQLModel, table=True):
     provider: str = "comfyui"
     width: int = 512
     height: int = 512
-    height: int = 512
     is_public: bool = Field(default=True)
     share_token: Optional[str] = Field(default=None, index=True, sa_column_kwargs={"unique": True})
     
@@ -120,11 +127,53 @@ class BatchJob(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-    images: List["Image"] = Relationship(back_populates="batch_job")
+
+class EditBatchJob(SQLModel, table=True):
+    """Batch job for bulk image editing - generates variations of a single image."""
+    __tablename__ = "edit_batch_job"
     
-    error_message: Optional[str] = None
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    
+    # Original Image Reference
+    original_image_id: int = Field(foreign_key="image.id")
+    original_image_url: str  # Store path for worker access
+    
+    # Variation Configuration
+    total_variations: int  # How many variations to generate
+    variations: Dict[str, List[str]] = Field(default={}, sa_column=Column(JSONB))
+    base_prompt_template: Optional[str] = None
+    edit_prompts: List[str] = Field(default=[], sa_column=Column(JSONB)) # Final expanded prompts
+    
+    # Generation Settings
+    model: str = "FLUX.1-Kontext-pro"
+    provider: str = "azure"
+    width: int = 512
+    height: int = 512
+    
+    # Progress Tracking
+    status: BatchJobStatus = Field(default=BatchJobStatus.QUEUED, index=True)
+    generated_count: int = Field(default=0)
+    failed_count: int = Field(default=0)
+    
+    # Sharing
+    is_public: bool = Field(default=True)
+    share_token: Optional[str] = Field(default=None, index=True, sa_column_kwargs={"unique": True})
+    
+    # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    # Relationships
+    user_id: int = Field(foreign_key="user.id")
+    user: Optional[User] = Relationship(back_populates="edit_batch_jobs")
+    original_image: Optional["Image"] = Relationship(sa_relationship_kwargs={"foreign_keys": "[EditBatchJob.original_image_id]"})
+    generated_images: List["Image"] = Relationship(
+        back_populates="edit_batch_job",
+        sa_relationship_kwargs={"foreign_keys": "[Image.edit_batch_job_id]"}
+    )
+    
+    error_message: Optional[str] = None
 
 
 class ActivityLog(SQLModel, table=True):

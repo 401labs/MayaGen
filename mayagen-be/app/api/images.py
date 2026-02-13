@@ -1,4 +1,5 @@
 import os
+import shutil
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
@@ -604,6 +605,83 @@ async def edit_image(
         return responses.api_error(
             status_code=500,
             message="Failed to queue image edit",
+            error=str(e)
+        )
+
+
+@router.post("/images/upload")
+async def upload_image(
+    file: UploadFile = File(...),
+    category: str = Form("uploads"),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    Directly upload an image to be used for edits or variations.
+    """
+    try:
+        # 1. Validate file extension
+        ext = file.filename.split(".")[-1].lower()
+        if ext not in config.ALLOWED_IMAGE_FORMATS:
+            return responses.api_error(
+                status_code=400,
+                message=f"Invalid file format. Allowed: {config.ALLOWED_IMAGE_FORMATS}"
+            )
+
+        # 2. Save file
+        from datetime import datetime as dt
+        
+        # Sanitize category to prevent directory traversal
+        safe_category = "".join([c for c in category if c.isalnum() or c in ('-', '_')]).strip()
+        if not safe_category:
+            safe_category = "uploads"
+            
+        upload_dir = os.path.join(config.OUTPUT_FOLDER, safe_category)
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"upload_{current_user.id}_{timestamp}.{ext}"
+        file_path = os.path.join(upload_dir, filename)
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # 3. Create Image record
+        # Note: This is an uploaded image, so status is COMPLETED immediately
+        new_image = Image(
+            filename=filename,
+            file_path=os.path.join(safe_category, filename),
+            prompt=f"Uploaded image: {file.filename}",
+            width=0, # Need to read dimensions if we care
+            height=0,
+            model="upload",
+            provider="user",
+            category=category,
+            user_id=current_user.id,
+            status=JobStatus.COMPLETED,
+            image_type="TEXT_TO_IMAGE", # Or add a new type
+            is_edit=False
+        )
+        
+        session.add(new_image)
+        await session.commit()
+        await session.refresh(new_image)
+        
+        return responses.api_success(
+            message="Image uploaded successfully",
+            data={
+                "id": new_image.id,
+                "url": f"{config.API_BASE_URL}/images/{safe_category}/{filename}",
+                "filename": filename
+            }
+        )
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return responses.api_error(
+            status_code=500,
+            message="Failed to upload image",
             error=str(e)
         )
 

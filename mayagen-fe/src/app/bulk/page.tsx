@@ -430,7 +430,7 @@ export default function BulkGeneratePage() {
         )}
 
         {/* Floating Footer Actions */}
-        <div className="fixed bottom-6 left-4 md:left-1/2 md:-translate-x-1/2 md:bottom-32 z-[60] flex items-center gap-2 md:gap-4 bg-neutral-900/80 backdrop-blur-xl p-1.5 md:p-2 pl-1.5 md:pl-2 pr-1.5 md:pr-2 rounded-full border border-neutral-700 shadow-2xl ring-1 ring-white/10">
+        <div className="fixed bottom-32 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 md:gap-4 bg-neutral-900/80 backdrop-blur-xl p-1.5 md:p-2 pl-1.5 md:pl-2 pr-1.5 md:pr-2 rounded-full border border-neutral-700 shadow-2xl ring-1 ring-white/10">
              
              {/* Back Button */}
              <Button 

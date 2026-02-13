@@ -3,9 +3,9 @@ import os
 import logging
 from datetime import datetime
 from sqlmodel import select
-from sqlalchemy import text
+from sqlalchemy import text, func
 from app.database import get_session_context
-from app.models import Image, JobStatus, BatchJob, BatchJobStatus
+from app.models import Image, JobStatus, BatchJob, BatchJobStatus, EditBatchJob
 from app.core import config
 from app.services.comfy_client import ComfyUIProvider
 from app.services.prompt_generator import generate_prompts
@@ -46,12 +46,18 @@ async def process_job(image_id: int):
             full_output_path = os.path.join(category_dir, job.filename)
             
             # 2. Check Provider / Job Type
-            if job.is_edit and job.provider == "azure_foundry":
+            if job.is_edit and job.provider in ["azure", "azure_foundry"]:
                 # Azure Foundry FLUX.2-pro Image Edit
                 from app.services.image_edit_service import image_edit_service
                 
                 # Read input image
                 input_path = os.path.join(config.OUTPUT_FOLDER, job.input_image_path)
+                input_path = os.path.normpath(input_path)
+                
+                if not os.path.exists(input_path):
+                    logger.error(f"Input image not found at: {input_path}")
+                    raise FileNotFoundError(f"Input image not found at: {input_path}")
+
                 with open(input_path, "rb") as f:
                     input_image_bytes = f.read()
                 
@@ -100,6 +106,8 @@ async def process_job(image_id: int):
             # 4. Update batch job progress if applicable
             if job.batch_job_id:
                 await update_batch_progress(job.batch_job_id, success=True)
+            elif job.edit_batch_job_id:
+                await update_edit_batch_progress(job.edit_batch_job_id, success=True)
 
         except Exception as e:
             logger.error(f"Job {job.id} FAILED: {e}")
@@ -111,19 +119,28 @@ async def process_job(image_id: int):
             # Update batch job progress
             if job.batch_job_id:
                 await update_batch_progress(job.batch_job_id, success=False)
+            elif job.edit_batch_job_id:
+                await update_edit_batch_progress(job.edit_batch_job_id, success=False)
 
 
 async def update_batch_progress(batch_id: int, success: bool):
-    """Update batch job progress after an image completes."""
+    """Update batch job progress by counting actual images."""
     async with get_session_context() as session:
         result = await session.execute(select(BatchJob).where(BatchJob.id == batch_id))
         batch = result.scalars().first()
         
         if batch:
-            if success:
-                batch.generated_count += 1
-            else:
-                batch.failed_count += 1
+            # Count completed and failed images
+            # This is idempotent and handles retries correctly
+            completed_count = await session.execute(
+                select(func.count()).where(Image.batch_job_id == batch_id, Image.status == JobStatus.COMPLETED)
+            )
+            failed_count = await session.execute(
+                select(func.count()).where(Image.batch_job_id == batch_id, Image.status == JobStatus.FAILED)
+            )
+            
+            batch.generated_count = completed_count.scalar_one()
+            batch.failed_count = failed_count.scalar_one()
             
             # Check if batch is complete
             total_processed = batch.generated_count + batch.failed_count
@@ -134,6 +151,105 @@ async def update_batch_progress(batch_id: int, success: bool):
             batch.updated_at = datetime.utcnow()
             session.add(batch)
             await session.commit()
+
+
+async def update_edit_batch_progress(edit_batch_id: int, success: bool):
+    """Update edit batch job progress by counting actual images."""
+    async with get_session_context() as session:
+        result = await session.execute(select(EditBatchJob).where(EditBatchJob.id == edit_batch_id))
+        batch = result.scalars().first()
+        
+        if batch:
+            # Count completed and failed images
+            completed_count = await session.execute(
+                select(func.count()).where(Image.edit_batch_job_id == edit_batch_id, Image.status == JobStatus.COMPLETED)
+            )
+            failed_count = await session.execute(
+                select(func.count()).where(Image.edit_batch_job_id == edit_batch_id, Image.status == JobStatus.FAILED)
+            )
+            
+            batch.generated_count = completed_count.scalar_one()
+            batch.failed_count = failed_count.scalar_one()
+            
+            # Check if batch is complete
+            total_processed = batch.generated_count + batch.failed_count
+            if total_processed >= batch.total_variations:
+                batch.status = BatchJobStatus.COMPLETED
+                logger.info(f"Edit Batch {batch.id} COMPLETED: {batch.generated_count} success, {batch.failed_count} failed")
+            
+            batch.updated_at = datetime.utcnow()
+            session.add(batch)
+            await session.commit()
+
+
+async def process_edit_batch_jobs():
+    """
+    Poll for QUEUED edit batch jobs and create Image records.
+    """
+    async with get_session_context() as session:
+        # Find next QUEUED edit batch job
+        result = await session.execute(
+            select(EditBatchJob)
+            .where(EditBatchJob.status == BatchJobStatus.QUEUED)
+            .order_by(EditBatchJob.created_at.asc())
+            .limit(1)
+        )
+        batch = result.scalars().first()
+        
+        if not batch:
+            return False
+            
+        logger.info(f"Processing Edit Batch Job {batch.id}: {batch.name} ({batch.total_variations} variations)")
+        
+        try:
+            # Mark as generating
+            batch.status = BatchJobStatus.GENERATING
+            session.add(batch)
+            await session.commit()
+            
+            # Get original image details
+            img_result = await session.execute(select(Image).where(Image.id == batch.original_image_id))
+            original_image = img_result.scalars().first()
+            
+            if not original_image:
+                raise Exception("Original image not found")
+
+            # Create Image records for each edit prompt
+            for i, prompt in enumerate(batch.edit_prompts):
+                # Ensure we don't exceed total variations if prompts list is shorter/longer
+                if i >= batch.total_variations:
+                    break
+                    
+                image = Image(
+                    prompt=prompt, # Using the edit prompt
+                    edit_prompt=prompt,
+                    filename=None, # Will be generated in process_job
+                    category=original_image.category,
+                    model=batch.model,
+                    provider=batch.provider,
+                    width=batch.width,
+                    height=batch.height,
+                    user_id=batch.user_id,
+                    edit_batch_job_id=batch.id,
+                    status=JobStatus.QUEUED,
+                    is_public=batch.is_public,
+                    is_edit=True,
+                    input_image_url=batch.original_image_url,
+                    input_image_path=os.path.join(original_image.category, original_image.filename)
+                )
+                session.add(image)
+            
+            await session.commit()
+            logger.info(f"Created {len(batch.edit_prompts)} image edit jobs for batch {batch.id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Edit Batch Job {batch.id} FAILED: {e}")
+            batch.status = BatchJobStatus.FAILED
+            batch.error_message = str(e)
+            session.add(batch)
+            await session.commit()
+            return False
 
 
 async def process_batch_jobs():
@@ -208,8 +324,11 @@ async def batch_manager_loop():
     logger.info("Batch Manager started.")
     while True:
         try:
-            if not await process_batch_jobs():
-                await asyncio.sleep(2) # Sleep if no batches found
+            has_batch = await process_batch_jobs()
+            has_edit_batch = await process_edit_batch_jobs()
+            
+            if not has_batch and not has_edit_batch:
+                await asyncio.sleep(2) # Sleep if no jobs found
         except Exception as e:
             logger.error(f"Batch Manager Error: {e}")
             await asyncio.sleep(5)
@@ -275,7 +394,7 @@ async def azure_worker_loop():
                         SELECT id
                         FROM image
                         WHERE status = 'QUEUED' 
-                        AND provider = 'azure_foundry'
+                        AND provider IN ('azure', 'azure_foundry')
                         ORDER BY created_at ASC
                         LIMIT 1
                         FOR UPDATE SKIP LOCKED
@@ -339,5 +458,15 @@ async def reset_stuck_jobs():
         result_batch = await session.execute(statement_batch)
         if result_batch.rowcount > 0:
              logger.warning(f"Marked {result_batch.rowcount} stuck GENERATING batches as FAILED.")
+             
+        # 3. Reset stuck Edit Batch Jobs to FAILED
+        statement_edit_batch = text("""
+            UPDATE edit_batch_job
+            SET status = 'FAILED', error_message = 'Server restarted during initialization'
+            WHERE status = 'GENERATING'
+        """)
+        result_edit_batch = await session.execute(statement_edit_batch)
+        if result_edit_batch.rowcount > 0:
+             logger.warning(f"Marked {result_edit_batch.rowcount} stuck GENERATING edit batches as FAILED.")
              
         await session.commit()

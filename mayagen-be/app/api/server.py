@@ -9,7 +9,7 @@ from ..core import config
 from ..database import init_db
 from ..services.worker import start_all_workers
 from ..helpers import api_response_helper as responses
-from . import auth, images, jobs, batch, admin
+from . import auth, images, jobs, batch, edit_batch, admin
 from app.middleware.activity_logger import ActivityLoggerMiddleware
 
 def create_app() -> FastAPI:
@@ -72,6 +72,7 @@ api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_v1.include_router(images.router, tags=["images"])
 api_v1.include_router(jobs.router, tags=["jobs"])
 api_v1.include_router(batch.router, tags=["batch"])
+api_v1.include_router(edit_batch.router, tags=["edit-batch"])
 api_v1.include_router(admin.router, prefix="/admin", tags=["admin"])
 
 # Include versioned router in app

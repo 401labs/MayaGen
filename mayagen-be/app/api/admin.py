@@ -6,7 +6,7 @@ from sqlmodel import select, col, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import case, text
 from ..database import get_session
-from ..models import User, Image, ActivityLog, JobStatus, BatchJob, BatchJobStatus
+from ..models import User, Image, ActivityLog, JobStatus, BatchJob, BatchJobStatus, EditBatchJob
 from ..core import config
 from .deps import get_current_admin_user
 from ..helpers import api_response_helper as responses
@@ -76,14 +76,22 @@ async def get_queue(
     queued_result = await session.execute(queued_query)
     queued_jobs = queued_result.scalars().all()
     
-    # 4. Active/pending batch jobs
+    # 4. Active/pending batch jobs (Regular & Edit)
     batch_query = (
         select(BatchJob)
         .where(BatchJob.status.in_([BatchJobStatus.QUEUED, BatchJobStatus.GENERATING]))
-        .order_by(BatchJob.created_at.asc())
+        .order_by(BatchJob.created_at.desc())
     )
     batch_result = await session.execute(batch_query)
     active_batches = batch_result.scalars().all()
+
+    edit_batch_query = (
+        select(EditBatchJob)
+        .where(EditBatchJob.status.in_([BatchJobStatus.QUEUED, BatchJobStatus.GENERATING]))
+        .order_by(EditBatchJob.created_at.desc())
+    )
+    edit_batch_result = await session.execute(edit_batch_query)
+    active_edit_batches = edit_batch_result.scalars().all()
     
     # Format helper
     base_url = config.API_BASE_URL + "/images"
@@ -121,13 +129,30 @@ async def get_queue(
         batch_list.append({
             "id": b.id,
             "name": b.name,
-            "status": str(b.status),
+            "type": "generate",
+            "status": str(b.status.value if hasattr(b.status, 'value') else b.status),
             "total_images": b.total_images,
             "generated_count": b.generated_count,
             "failed_count": b.failed_count,
             "user_id": b.user_id,
             "created_at": b.created_at.isoformat() if b.created_at else None,
         })
+    
+    for b in active_edit_batches:
+        batch_list.append({
+            "id": b.id,
+            "name": b.name,
+            "type": "edit",
+            "status": str(b.status.value if hasattr(b.status, 'value') else b.status),
+            "total_images": b.total_variations,
+            "generated_count": b.generated_count,
+            "failed_count": b.failed_count,
+            "user_id": b.user_id,
+            "created_at": b.created_at.isoformat() if b.created_at else None,
+        })
+    
+    # Sort combined list by created_at desc
+    batch_list.sort(key=lambda x: x["created_at"], reverse=True)
     
     return responses.api_success(
         message="Queue retrieved",

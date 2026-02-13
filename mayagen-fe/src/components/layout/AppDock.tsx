@@ -46,9 +46,9 @@ export function AppDock() {
       href: "/edit",
     },
     {
-      title: "Bulk Generate",
+      title: "Bulk Generation",
       icon: <Sparkles className="h-full w-full text-amber-400" />,
-      href: "/bulk",
+      href: "/bulk-generate",
     },
   ];
 
@@ -60,9 +60,14 @@ export function AppDock() {
           href: "/collections",
         },
         {
-          title: "History",
+          title: "Gen History",
           icon: <History className="h-full w-full text-orange-400" />,
           href: "/bulk/history",
+        },
+        {
+          title: "Edit History",
+          icon: <History className="h-full w-full text-indigo-400" />,
+          href: "/bulk-edit/history",
         },
         {
           title: "Logout",

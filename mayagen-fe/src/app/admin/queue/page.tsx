@@ -33,6 +33,7 @@ interface QueueJob {
   height: number;
   user_id: number;
   batch_job_id: number | null;
+  edit_batch_job_id: number | null;
   url: string | null;
   created_at: string;
   updated_at: string;
@@ -274,11 +275,15 @@ export default function QueueAdminPage() {
                     <td className="px-5 py-3">
                       <span className="bg-neutral-800 px-1.5 py-0.5 rounded text-xs text-neutral-400">#{job.user_id}</span>
                     </td>
-                    <td className="px-5 py-3 text-neutral-500 text-xs">
-                      {job.batch_job_id ? (
-                        <span className="flex items-center gap-1">
-                          <Layers className="w-3 h-3 text-cyan-500" />
-                          #{job.batch_job_id}
+                    <td className="px-5 py-3 text-neutral-500 text-xs text-center">
+                      {job.batch_job_id || job.edit_batch_job_id ? (
+                        <span className="flex items-center justify-center gap-1">
+                          {job.edit_batch_job_id ? (
+                            <Wand2 className="w-3 h-3 text-fuchsia-400" />
+                          ) : (
+                            <Layers className="w-3 h-3 text-cyan-500" />
+                          )}
+                          #{job.batch_job_id || job.edit_batch_job_id}
                         </span>
                       ) : "—"}
                     </td>
@@ -312,8 +317,8 @@ export default function QueueAdminPage() {
                     Batch #{batch.id} · User #{batch.user_id} · {format(new Date(batch.created_at), "MMM d, HH:mm")}
                   </p>
                 </div>
-                <Badge className={`text-xs ${
-                  batch.status === "generating"
+                <Badge className={`text-xs uppercase ${
+                  batch.status.toLowerCase() === "generating"
                     ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
                     : "bg-amber-500/10 text-amber-400 border-amber-500/20"
                 }`}>
@@ -362,9 +367,10 @@ function JobRow({ job }: { job: QueueJob }) {
           <Wand2 className="w-3 h-3 mr-1" />Edit
         </Badge>
       )}
-      {job.batch_job_id && (
-        <Badge className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 text-[10px]">
-          <Layers className="w-3 h-3 mr-1" />Batch #{job.batch_job_id}
+      {(job.batch_job_id || job.edit_batch_job_id) && (
+        <Badge className={`${job.edit_batch_job_id ? 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20' : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'} text-[10px]`}>
+          {job.edit_batch_job_id ? <Wand2 className="w-3 h-3 mr-1" /> : <Layers className="w-3 h-3 mr-1" />}
+          Batch #{job.batch_job_id || job.edit_batch_job_id}
         </Badge>
       )}
       <p className="text-xs text-neutral-600 whitespace-nowrap">
