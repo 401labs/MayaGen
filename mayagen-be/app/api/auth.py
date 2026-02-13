@@ -21,7 +21,7 @@ router = APIRouter()
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 # Ensure this matches your Google Console and Frontend
-REDIRECT_URI = "http://localhost:3000/auth/callback" 
+REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "https://mayagen.fun/auth/callback") 
 
 class GoogleCallbackRequest(BaseModel):
     code: str
