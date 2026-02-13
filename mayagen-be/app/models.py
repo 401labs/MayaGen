@@ -18,6 +18,11 @@ class BatchJobStatus(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
 
+class ImageType(str, Enum):
+    TEXT_TO_IMAGE = "TEXT_TO_IMAGE"   # Single text-to-image generation
+    IMAGE_EDIT = "IMAGE_EDIT"         # Editing an existing image
+    BATCH = "BATCH"                   # Part of a bulk batch job
+
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(index=True, unique=True)
@@ -46,6 +51,15 @@ class Image(SQLModel, table=True):
     category: str = "uncategorized"
     settings: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSONB))
     is_public: bool = Field(default=True)
+    
+    # Image Type
+    image_type: Optional[str] = Field(default="TEXT_TO_IMAGE")  # TEXT_TO_IMAGE, IMAGE_EDIT, BATCH
+    
+    # Image Editing/Variation Fields
+    is_edit: bool = Field(default=False)  # True if this is an edited/varied image
+    original_image_id: Optional[int] = Field(default=None, foreign_key="image.id")
+    edit_prompt: Optional[str] = None  # Prompt used for editing
+    input_image_path: Optional[str] = None  # Path to original input image (for edits)
     
     # Status Tracking
     status: JobStatus = Field(default=JobStatus.QUEUED, index=True)

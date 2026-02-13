@@ -6,7 +6,8 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Download, Share2, Calendar, User, Hash, Layers, Cpu, FolderOpen, Image as ImageIcon, Clock, FileText, Maximize2, Copy, Check, Globe, Lock } from "lucide-react";
+import { Compare } from "@/components/ui/compare";
+import { Loader2, ArrowLeft, Download, Share2, Calendar, User, Hash, Layers, Cpu, FolderOpen, Image as ImageIcon, Clock, FileText, Maximize2, Copy, Check, Globe, Lock, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
@@ -28,12 +29,25 @@ interface ImageDetail {
   status: string;
   is_public: boolean;
   queue_position?: number | null;
+  image_type?: string;
+  is_edit?: boolean;
+  original_image_id?: number | null;
+  edit_prompt?: string | null;
+  input_image_url?: string | null;
 }
 
 // Model Display Names
 const MODEL_NAMES: Record<string, string> = {
   sd15: "DreamShaper 8",
   lcm: "SD 1.5 Base (LCM)",
+  "FLUX.1-Kontext-pro": "FLUX.1 Kontext Pro",
+};
+
+// Image Type Labels
+const IMAGE_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  TEXT_TO_IMAGE: { label: "Text to Image", color: "bg-indigo-500/15 text-indigo-400 border-indigo-500/25" },
+  IMAGE_EDIT: { label: "Image Edit", color: "bg-violet-500/15 text-violet-400 border-violet-500/25" },
+  BATCH: { label: "Batch", color: "bg-amber-500/15 text-amber-400 border-amber-500/25" },
 };
 
 export default function ImageDetailPage() {
@@ -56,7 +70,6 @@ export default function ImageDetailPage() {
         }
       } catch (err: any) {
         console.error("Error fetching image:", err);
-        // If 403, might handle differently, but toast error works for now
         if (err.response?.status === 403) {
             toast.error("Access Denied: Private Image");
         } else {
@@ -117,7 +130,6 @@ export default function ImageDetailPage() {
     }
   };
 
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-950 text-white">
@@ -134,7 +146,7 @@ export default function ImageDetailPage() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-950 text-white gap-4 px-6 text-center">
         <ImageIcon className="w-16 h-16 text-neutral-700" />
         <h1 className="text-2xl font-bold text-red-500">Image Not Found</h1>
-        <p className="text-neutral-500 max-w-sm">The image you're looking for doesn't exist, has been removed, or is private.</p>
+        <p className="text-neutral-500 max-w-sm">The image you&apos;re looking for doesn&apos;t exist, has been removed, or is private.</p>
         <Button onClick={() => {
           const searchParams = new URLSearchParams(window.location.search);
           const from = searchParams.get('from');
@@ -152,6 +164,9 @@ export default function ImageDetailPage() {
   const isQueued = image.status === 'QUEUED';
   const isProcessing = image.status === 'PENDING' || image.status === 'PROCESSING';
   const isOwner = user && image && Number(user.id) === Number(image.user_id);
+  const isEditImage = image.image_type === 'IMAGE_EDIT' || image.is_edit;
+  const hasCompareData = isEditImage && image.url && image.input_image_url;
+  const typeInfo = IMAGE_TYPE_LABELS[image.image_type || "TEXT_TO_IMAGE"] || IMAGE_TYPE_LABELS.TEXT_TO_IMAGE;
 
   return (
     <div className="min-h-screen lg:h-screen bg-neutral-950 text-neutral-100 lg:overflow-hidden flex flex-col">
@@ -164,6 +179,7 @@ export default function ImageDetailPage() {
           scrollbar-width: none;
         }
       `}</style>
+
       {/* Top Bar */}
       <header className="sticky top-0 z-50 backdrop-blur-lg bg-neutral-950/80 border-b border-neutral-800 px-6 py-3 flex items-center justify-between">
         <Button
@@ -171,7 +187,6 @@ export default function ImageDetailPage() {
             const searchParams = new URLSearchParams(window.location.search);
             const from = searchParams.get('from');
             const batchId = searchParams.get('batchId');
-            
             if (from === 'batch' && batchId) {
               router.push(`/bulk/view/${batchId}`);
             } else {
@@ -182,11 +197,15 @@ export default function ImageDetailPage() {
           size="sm"
           className="hover:bg-neutral-900 text-neutral-400 hover:text-white"
         >
-          <ArrowLeft className="mr-2 h-4 w-4" /> 
-          {/* Dynamic Label is tricky with CSR without hydration mismatch, defaulting to "Back" is safer or use state */}
+          <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
         <div className="flex items-center gap-2">
+          {/* Image Type Badge */}
+          <Badge variant="outline" className={`${typeInfo.color} text-xs font-medium`}>
+            {isEditImage && <Wand2 className="w-3 h-3 mr-1" />}
+            {typeInfo.label}
+          </Badge>
           <Badge variant="outline" className="text-neutral-400 border-neutral-700 font-mono">
             <Hash className="w-3 h-3 mr-1" /> {image.id}
           </Badge>
@@ -253,6 +272,31 @@ export default function ImageDetailPage() {
                 <span className="px-2 py-1 bg-neutral-800 rounded">{image.width}x{image.height}</span>
               </div>
             </div>
+          ) : hasCompareData ? (
+            /* ─── Compare Slider for Edited Images ─── */
+            <div className="relative z-10 flex flex-col items-center justify-center gap-4 p-4 w-full h-full">
+              {/* Labels */}
+              <div className="flex items-center justify-between w-full max-w-[700px] px-2">
+                <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-widest">Original</span>
+                <span className="text-[11px] font-semibold text-violet-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Wand2 className="w-3 h-3" />
+                  Edited
+                </span>
+              </div>
+              {/* Compare Component */}
+              <div className="rounded-2xl bg-white/[0.02] border border-white/[0.06] p-2 shadow-2xl shadow-black/30">
+                <Compare
+                  firstImage={image.input_image_url!}
+                  secondImage={image.url!}
+                  firstImageClassName="object-contain"
+                  secondImageClassname="object-contain"
+                  className="h-[300px] w-[300px] md:h-[500px] md:w-[650px] lg:h-[calc(100vh-220px)] lg:w-[650px] rounded-xl"
+                  slideMode="hover"
+                  showHandlebar={true}
+                  initialSliderPercentage={50}
+                />
+              </div>
+            </div>
           ) : image.url ? (
             <div className="relative z-10 w-full h-full flex items-center justify-center p-0 transition-all duration-300">
               <Image
@@ -284,6 +328,30 @@ export default function ImageDetailPage() {
         {/* Details Panel (Right) */}
         <aside className="w-full lg:w-[400px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-neutral-800 bg-neutral-900/50 lg:overflow-y-auto no-scrollbar">
           <div className="p-4 space-y-4">
+
+            {/* Edit Info Card (only for edited images) */}
+            {isEditImage && (
+              <Card className="bg-violet-500/[0.06] border-violet-500/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2 text-violet-300">
+                    <Wand2 className="w-4 h-4" /> Image Edit
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {image.edit_prompt && (
+                    <div>
+                      <p className="text-xs text-neutral-500 mb-1">Edit Prompt</p>
+                      <p className="text-sm text-neutral-200">{image.edit_prompt}</p>
+                    </div>
+                  )}
+                  {image.input_image_url && (
+                    <p className="text-[11px] text-violet-400/70">
+                      Hover the image to compare original vs edited
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Prompt Section */}
             <Card className="bg-neutral-800/50 border-neutral-700">
@@ -338,12 +406,18 @@ export default function ImageDetailPage() {
                   {image.updated_at && (
                     <MetaItem icon={<Clock className="w-3.5 h-3.5" />} label="Updated" value={new Date(image.updated_at).toLocaleString()} />
                   )}
-                  {/* Visibility Status */}
                   <MetaItem 
                     icon={image.is_public ? <Globe className="w-3.5 h-3.5 text-neutral-400" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />} 
                     label="Visibility" 
                     value={image.is_public ? "Public" : "Private"} 
                   />
+                  {image.image_type && (
+                    <MetaItem 
+                      icon={<Wand2 className="w-3.5 h-3.5" />} 
+                      label="Type" 
+                      value={IMAGE_TYPE_LABELS[image.image_type]?.label || image.image_type} 
+                    />
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -382,7 +456,7 @@ export default function ImageDetailPage() {
                      image.is_public 
                        ? "border-neutral-700 bg-black/20 hover:bg-neutral-800 text-neutral-400 hover:text-white" 
                        : "border-amber-500/30 bg-amber-900/10 text-amber-500 hover:bg-amber-900/20"
-                   }`}
+                  }`}
                  >
                    {toggling ? (
                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />

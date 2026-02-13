@@ -16,6 +16,8 @@ import {
   Activity,
   Users,
   ShieldCheck,
+  Wand2,
+  ListOrdered,
 } from "lucide-react";
 
 export function AppDock() {
@@ -37,6 +39,11 @@ export function AppDock() {
       title: "Gallery",
       icon: <ImageIcon className="h-full w-full text-pink-400" />,
       href: "/gallery",
+    },
+    {
+      title: "Edit Image",
+      icon: <Wand2 className="h-full w-full text-fuchsia-400" />,
+      href: "/edit",
     },
     {
       title: "Bulk Generate",
@@ -88,6 +95,11 @@ export function AppDock() {
           title: "Activity Logs",
           icon: <Activity className="h-full w-full text-indigo-400" />,
           href: "/admin/activity",
+        },
+        {
+          title: "Queue Monitor",
+          icon: <ListOrdered className="h-full w-full text-amber-400" />,
+          href: "/admin/queue",
         },
         {
           title: "Verify Images",

@@ -51,3 +51,13 @@ WORKFLOWS = {
 # General Settings
 OUTPUT_FOLDER = str(OUTPUT_DIR)
 IMAGE_PREFIX = "img_"
+
+# Azure Foundry Configuration (FLUX.1-Kontext-pro)
+AZURE_FOUNDRY_ENDPOINT = os.getenv("AZURE_FOUNDRY_ENDPOINT", "https://mayagen-ai-model-resource.openai.azure.com")
+AZURE_FOUNDRY_API_KEY = os.getenv("AZURE_FOUNDRY_API_KEY", "")
+AZURE_FOUNDRY_MODEL = os.getenv("AZURE_FOUNDRY_MODEL", "FLUX.1-Kontext-pro")
+AZURE_FOUNDRY_BFL_ENDPOINT = os.getenv("AZURE_FOUNDRY_BFL_ENDPOINT", "https://mayagen-ai-model-resource.services.ai.azure.com")
+
+# Image Upload Settings
+MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "5"))
+ALLOWED_IMAGE_FORMATS = ["jpg", "jpeg", "png", "webp"]

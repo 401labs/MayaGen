@@ -1,6 +1,6 @@
 import os
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,7 +58,7 @@ async def list_images(
              base_query = base_query.where(Image.status == JobStatus.COMPLETED)
 
         if model and model != "all":
-            base_query = base_query.where(Image.model == model)
+            base_query =base_query.where(Image.model == model)
 
         # Count total
         count_statement = select(func.count()).select_from(base_query.subquery())
@@ -158,6 +158,7 @@ async def get_my_images(
     category: Optional[str] = None,
     status: Optional[str] = None,
     model: Optional[str] = None,
+    image_type: Optional[str] = None,
     sort_by: str = "newest"
 ):
     """Get all images created by the current user (Private & Public)."""
@@ -170,6 +171,9 @@ async def get_my_images(
         base_query = select(Image).where(Image.user_id == current_user.id)
         
         # Apply filters
+        if image_type:
+             base_query = base_query.where(Image.image_type == image_type)
+
         if search:
             base_query = base_query.where(or_(
                 Image.prompt.ilike(f"%{search}%"),
@@ -219,6 +223,9 @@ async def get_my_images(
         if model and model != "all":
             statement = statement.where(Image.model == model)
             
+        if image_type:
+            statement = statement.where(Image.image_type == image_type)
+            
         # Apply Sorting
         if sort_by == "oldest":
             statement = statement.order_by(Image.created_at.asc())
@@ -250,7 +257,10 @@ async def get_my_images(
                 "created_at": img.created_at.isoformat(),
                 "created_by": current_user.username,
                 "is_public": img.is_public,
-                "status": img.status
+                "is_public": img.is_public,
+                "status": img.status,
+                "image_type": img.image_type,
+                "input_image_url": f"{base_url}/{img.input_image_path.replace('\\', '/')}" if img.input_image_path and img.is_edit else None
             })
             
         return responses.api_success(
@@ -386,7 +396,7 @@ async def get_image(
         """Get a single image detail."""
         base_url = config.API_BASE_URL + "/images"
         
-        # Query with User join
+        #Query with User join
         statement = select(Image, User).where(Image.id == image_id).join(User, isouter=True)
         result = await session.execute(statement)
         row = result.first()
@@ -411,6 +421,12 @@ async def get_image(
         if img.status in [JobStatus.QUEUED, JobStatus.PROCESSING]:
             queue_pos = await calculate_queue_position(session, img)
 
+        # Build input image URL for edits
+        input_image_url = None
+        if img.input_image_path and img.is_edit:
+            safe_input_path = img.input_image_path.replace("\\", "/")
+            input_image_url = f"{base_url}/{safe_input_path}"
+
         return responses.api_success(
             message="Image Detail Retrieved",
             data={
@@ -428,7 +444,12 @@ async def get_image(
                 "created_by": user.username if user else "Anonymous",
                 "is_public": img.is_public,
                 "status": img.status,
-                "queue_position": queue_pos
+                "queue_position": queue_pos,
+                "image_type": img.image_type or ("IMAGE_EDIT" if img.is_edit else "TEXT_TO_IMAGE"),
+                "is_edit": img.is_edit,
+                "original_image_id": img.original_image_id,
+                "edit_prompt": img.edit_prompt,
+                "input_image_url": input_image_url
             }
         )
     except Exception as e:
@@ -471,4 +492,118 @@ async def update_image(
     except Exception as e:
         return responses.api_error(status_code=500, message="Failed to update image", error=str(e))
 
+
+# Image Edit/Variation Endpoint
+@router.post("/images/edit")
+async def edit_image(
+    image: UploadFile = File(...),
+    prompt: str = Form(...),
+    negative_prompt: Optional[str] = Form(None),
+    width: int = Form(1024),
+    height: int = Form(1024),
+    category: str = Form("edits"),
+    is_public: bool = Form(True),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    Edit/vary an uploaded image using Azure Foundry FLUX.2-pro.
+    
+    Args:
+        image: Input image file (JPEG, PNG, WebP)
+        prompt: Text prompt describing desired changes
+        negative_prompt: What to avoid in the output (optional)
+        width: Output width (default: 1024)
+        height: Output height (default: 1024)
+        category: Category for organizing edits (default: "edits")
+        is_public: Whether edited image should be public (default: True)
+    
+    Returns:
+        Completed image with URL
+    """
+    try:
+        from ..services.image_edit_service import image_edit_service
+        
+        # Validate file
+        if not image_edit_service.validate_image(image):
+            return responses.api_error(
+                status_code=400,
+                message="Invalid image file",
+                error="Please upload a valid image file (JPEG, PNG, or WebP)"
+            )
+        
+        # Check file size
+        image_bytes = await image.read()
+        size_mb = len(image_bytes) / (1024 * 1024)
+        if size_mb > config.MAX_UPLOAD_SIZE_MB:
+            return responses.api_error(
+                status_code=400,
+                message="File too large",
+                error=f"Image size ({size_mb:.1f}MB) exceeds limit ({config.MAX_UPLOAD_SIZE_MB}MB)"
+            )
+        
+        # Save input image
+        input_image_path = await image_edit_service.save_input_image(
+            image_bytes,
+            current_user.id,
+            image.filename or "input.png"
+        )
+        
+        # Create QUEUED image record
+        from datetime import datetime as dt
+        timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"edit_{current_user.id}_{timestamp}.png"
+        
+        # We don't have the file yet, but we define where it WILL be
+        # The worker will safe the result to this path
+        
+        new_image = Image(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            filename=filename,
+            width=width,
+            height=height,
+            model=config.AZURE_FOUNDRY_MODEL, # "FLUX.1-Kontext-pro"
+            provider="azure_foundry",
+            category=category,
+            is_public=is_public,
+            user_id=current_user.id,
+            status=JobStatus.QUEUED, # <--- IMPORTANT: Queued, not Completed
+            image_type="IMAGE_EDIT",
+            is_edit=True,
+            edit_prompt=prompt,
+            input_image_path=input_image_path
+        )
+        
+        session.add(new_image)
+        await session.commit()
+        await session.refresh(new_image)
+        
+        # We return the job info immediately
+        # The frontend will poll /images/{id} to see when status changes to COMPLETED
+        
+        return responses.api_success(
+            message="Image edit queued",
+            data={
+                "id": new_image.id,
+                "status": "QUEUED",
+                "prompt": prompt,
+                "category": category,
+                "image_type": "IMAGE_EDIT",
+                "is_edit": True,
+                "filename": filename,
+                "width": width,
+                "height": height,
+                "input_image_url": f"{config.API_BASE_URL}/images/{input_image_path.replace('\\', '/')}"
+            }
+        )
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return responses.api_error(
+            status_code=500,
+            message="Failed to queue image edit",
+            error=str(e)
+        )
 

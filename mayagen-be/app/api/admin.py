@@ -1,15 +1,153 @@
 
 from typing import List, Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select, col, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import case, text
 from ..database import get_session
-from ..models import User, Image, ActivityLog
+from ..models import User, Image, ActivityLog, JobStatus, BatchJob, BatchJobStatus
 from ..core import config
 from .deps import get_current_admin_user
 from ..helpers import api_response_helper as responses
 
 router = APIRouter()
+
+# --- Queue Management ---
+
+@router.get("/queue")
+async def get_queue(
+    skip: int = 0,
+    limit: int = 50,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(get_current_admin_user)
+):
+    """Get global queue with positions, stats, and processing jobs."""
+    
+    # 1. Stats: count by status
+    stats_query = select(
+        Image.status,
+        func.count(Image.id)
+    ).group_by(Image.status)
+    stats_result = await session.execute(stats_query)
+    stats_raw = stats_result.all()
+    print(f"DEBUG: stats_raw = {stats_raw}")
+    
+    # Ensure keys are strings and handle potential case mismatch if needed (though API returns what it returns)
+    stats = {}
+    for s, c in stats_raw:
+        # If 's' is Enum, s.value gives the string. If it's already string, use it.
+        key = str(s.value if hasattr(s, 'value') else s)
+        print(f"DEBUG: Processing stat key={key} count={c}")
+        stats[key.lower()] = c # Force lowercase keys to match what I just set in Frontend
+
+    print(f"DEBUG: final stats dict = {stats}")
+
+    
+    # 2. Currently PROCESSING jobs (Always get all processing jobs as they are few)
+    processing_query = (
+        select(Image)
+        .where(Image.status == JobStatus.PROCESSING)
+        .order_by(Image.updated_at.desc())
+    )
+    processing_result = await session.execute(processing_query)
+    processing_jobs = processing_result.scalars().all()
+    
+    # 3. QUEUED jobs (Pagination)
+    # Count total queued first
+    queue_count_query = select(func.count()).select_from(Image).where(Image.status == JobStatus.QUEUED)
+    queue_total_result = await session.execute(queue_count_query)
+    queue_total = queue_total_result.scalar()
+
+    # Fetch page of queued jobs
+    queued_query = (
+        select(Image)
+        .where(Image.status == JobStatus.QUEUED)
+        .order_by(
+            case(
+                (Image.batch_job_id.is_(None), 0),
+                else_=1
+            ).asc(),
+            Image.created_at.asc()
+        )
+        .offset(skip)
+        .limit(limit)
+    )
+    queued_result = await session.execute(queued_query)
+    queued_jobs = queued_result.scalars().all()
+    
+    # 4. Active/pending batch jobs
+    batch_query = (
+        select(BatchJob)
+        .where(BatchJob.status.in_([BatchJobStatus.QUEUED, BatchJobStatus.GENERATING]))
+        .order_by(BatchJob.created_at.asc())
+    )
+    batch_result = await session.execute(batch_query)
+    active_batches = batch_result.scalars().all()
+    
+    # Format helper
+    base_url = config.API_BASE_URL + "/images"
+    def format_job(img, position=None):
+        safe_cat = img.category.replace("\\", "/") if img.category else "uncategorized"
+        output_path = f"{safe_cat}/{img.filename}" if img.filename else None
+        # Clean status: use .value if available (e.g. "QUEUED") instead of str() (e.g. "JobStatus.QUEUED")
+        status_str = img.status.value if hasattr(img.status, 'value') else str(img.status)
+        
+        return {
+            "id": img.id,
+            "position": position,
+            "prompt": img.prompt[:100] if img.prompt else None,
+            "edit_prompt": img.edit_prompt[:100] if img.edit_prompt else None,
+            "is_edit": img.is_edit,
+            "status": status_str,
+            "model": img.model,
+            "provider": img.provider,
+            "category": img.category,
+            "width": img.width,
+            "height": img.height,
+            "user_id": img.user_id,
+            "batch_job_id": img.batch_job_id,
+            "url": f"{base_url}/{output_path}" if output_path else None,
+            "created_at": img.created_at.isoformat() if img.created_at else None,
+            "updated_at": img.updated_at.isoformat() if img.updated_at else None,
+        }
+    
+    processing_list = [format_job(j) for j in processing_jobs]
+    # Calculate global position: skip + index + 1
+    queued_list = [format_job(j, position=skip + i + 1) for i, j in enumerate(queued_jobs)]
+    
+    batch_list = []
+    for b in active_batches:
+        batch_list.append({
+            "id": b.id,
+            "name": b.name,
+            "status": str(b.status),
+            "total_images": b.total_images,
+            "generated_count": b.generated_count,
+            "failed_count": b.failed_count,
+            "user_id": b.user_id,
+            "created_at": b.created_at.isoformat() if b.created_at else None,
+        })
+    
+    return responses.api_success(
+        message="Queue retrieved",
+        data={
+            "stats": {
+                "queued": stats.get("queued", 0),
+                "processing": stats.get("processing", 0),
+                "completed": stats.get("completed", 0),
+                "failed": stats.get("failed", 0),
+            },
+            "processing": processing_list,
+            "queued": {
+                "items": queued_list,
+                "total": queue_total,
+                "skip": skip,
+                "limit": limit
+            },
+            "active_batches": batch_list,
+        }
+    )
 
 # --- User Management ---
 

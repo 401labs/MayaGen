@@ -307,7 +307,7 @@ export default function UsersAdminPage() {
                                      )}
                                    </div>
                                  </div>
-                               ))}\n                             </div>
+                               ))}</div>
                            )}
                          </div>
                        </td>

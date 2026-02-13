@@ -36,11 +36,41 @@ async def process_job(image_id: int):
             category_dir = os.path.join(config.OUTPUT_FOLDER, safe_category)
             os.makedirs(category_dir, exist_ok=True)
             
+            # Generate filename if not set (for edit jobs)
+            if not job.filename:
+                from datetime import datetime as dt
+                timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
+                job.filename = f"edit_{job.id}_{timestamp}.png"
+            
             # Construct full absolute path
             full_output_path = os.path.join(category_dir, job.filename)
             
-            # 2. Check Provider
-            if job.provider == "comfyui":
+            # 2. Check Provider / Job Type
+            if job.is_edit and job.provider == "azure_foundry":
+                # Azure Foundry FLUX.2-pro Image Edit
+                from app.services.image_edit_service import image_edit_service
+                
+                # Read input image
+                input_path = os.path.join(config.OUTPUT_FOLDER, job.input_image_path)
+                with open(input_path, "rb") as f:
+                    input_image_bytes = f.read()
+                
+                # Call Azure Foundry API
+                output_bytes = await image_edit_service.edit_image(
+                    image_bytes=input_image_bytes,
+                    prompt=job.edit_prompt or job.prompt,
+                    negative_prompt=job.negative_prompt,
+                    width=job.width,
+                    height=job.height
+                )
+                
+                # Save output image
+                with open(full_output_path, "wb") as f:
+                    f.write(output_bytes)
+                
+                logger.info(f"Azure Foundry edit completed for job {job.id}")
+            
+            elif job.provider == "comfyui":
                 workflow_path = config.WORKFLOWS.get(job.model, config.WORKFLOWS["sd15"])
                 
                 # EXECUTE GENERATION
@@ -172,27 +202,34 @@ async def process_batch_jobs():
             return False
 
 
-async def worker_loop():
-    logger.info("Worker started inside Server Process...")
-    
+
+async def batch_manager_loop():
+    """Loop for expanding Batch Jobs into Image Jobs."""
+    logger.info("Batch Manager started.")
     while True:
         try:
-            # logger.info("Worker: Checking queue...") 
-            
-            # 1. First, check for QUEUED batch jobs to expand
-            if await process_batch_jobs():
-                continue
-            
-            # 2. Then, process individual image jobs
+            if not await process_batch_jobs():
+                await asyncio.sleep(2) # Sleep if no batches found
+        except Exception as e:
+            logger.error(f"Batch Manager Error: {e}")
+            await asyncio.sleep(5)
+
+
+async def comfy_worker_loop():
+    """Loop for processing local ComfyUI generation jobs."""
+    logger.info("ComfyUI Worker started.")
+    while True:
+        try:
             async with get_session_context() as session:
-                # ACID Transaction for Queue Popping
+                # Pop next ComfyUI job
                 statement = text("""
                     UPDATE image
                     SET status = 'PROCESSING'
                     WHERE id = (
                         SELECT id
                         FROM image
-                        WHERE status = 'QUEUED'
+                        WHERE status = 'QUEUED' 
+                        AND provider = 'comfyui'
                         ORDER BY 
                             CASE WHEN batch_job_id IS NULL THEN 0 ELSE 1 END ASC,
                             created_at ASC
@@ -207,28 +244,80 @@ async def worker_loop():
                 
                 if row:
                     job_id = row[0]
-                    await session.commit() 
+                    await session.commit()
                     
-                    logger.info(f"Worker: Picked up Job {job_id}. Processing...")
+                    logger.info(f"ComfyWorker: Picked up Job {job_id}...")
                     try:
                         await process_job(job_id)
-                        logger.info(f"Worker: Finished Job {job_id}.")
+                        logger.info(f"ComfyWorker: Finished Job {job_id}.")
                     except Exception as e:
-                        logger.error(f"Worker: Error processing Job {job_id}: {e}")
+                        logger.error(f"ComfyWorker: Error on Job {job_id}: {e}")
                 else:
                     await session.commit()
-                    # No jobs, sleep
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(1) # No jobs
                     
         except Exception as e:
-            logger.error(f"Worker Loop Error: {e}")
+            logger.error(f"ComfyWorker Critical Error: {e}")
             await asyncio.sleep(5)
+
+
+async def azure_worker_loop():
+    """Loop for processing cloud Azure Foundry editing jobs."""
+    logger.info("Azure Worker started.")
+    while True:
+        try:
+            async with get_session_context() as session:
+                # Pop next Azure job
+                statement = text("""
+                    UPDATE image
+                    SET status = 'PROCESSING'
+                    WHERE id = (
+                        SELECT id
+                        FROM image
+                        WHERE status = 'QUEUED' 
+                        AND provider = 'azure_foundry'
+                        ORDER BY created_at ASC
+                        LIMIT 1
+                        FOR UPDATE SKIP LOCKED
+                    )
+                    RETURNING id;
+                """)
+                
+                result = await session.execute(statement)
+                row = result.first()
+                
+                if row:
+                    job_id = row[0]
+                    await session.commit()
+                    
+                    logger.info(f"AzureWorker: Picked up Job {job_id}...")
+                    try:
+                        await process_job(job_id)
+                        logger.info(f"AzureWorker: Finished Job {job_id}.")
+                    except Exception as e:
+                        logger.error(f"AzureWorker: Error on Job {job_id}: {e}")
+                else:
+                    await session.commit()
+                    await asyncio.sleep(1) # No jobs
+
+        except Exception as e:
+            logger.error(f"AzureWorker Critical Error: {e}")
+            await asyncio.sleep(5)
+
+
+async def start_all_workers():
+    """Starts all background worker loops concurrently."""
+    logger.info("Initializing background workers...")
+    await asyncio.gather(
+        batch_manager_loop(),
+        comfy_worker_loop(),
+        azure_worker_loop()
+    )
 
 
 async def reset_stuck_jobs():
     """
     Resets jobs stuck in PROCESSING or GENERATING state on startup.
-    This handles cases where the server crashed or was restarted during processing.
     """
     async with get_session_context() as session:
         # 1. Reset stuck Images
@@ -241,26 +330,7 @@ async def reset_stuck_jobs():
         if result.rowcount > 0:
             logger.warning(f"Reset {result.rowcount} stuck PROCESSING images to QUEUED.")
             
-        # 2. Reset stuck Batch Jobs
-        # If a batch job was GENERATING, it means it was in the middle of creating image records.
-        # Since the creation is atomic (all images added + status update commit), 
-        # it's possible it failed before commit.
-        # If it's GENERATING, we should check if images were created.
-        # But simpler logic: If GENERATING, set back to QUEUED to retry expansion?
-        # IMPORTANT: If we retry expansion, we might create duplicates if partial commit happened.
-        # Review `process_batch_jobs`: It commits `GENERATING` status FIRST, then creates images, then commits `QUEUED` images.
-        # If it crashes in between, we have a batch in GENERATING but no images (or partial?).
-        # `process_batch_jobs` checks `BatchJob.status == QUEUED`.
-        # If we reset GENERATING -> QUEUED, it will run again.
-        # And `process_batch_jobs` logic:
-        # `prompts = generate_prompts(...)`
-        # `for i, prompt in enumerate(prompts): ...`
-        # If we re-run, we create NEW images.
-        # We need to be careful.
-        # For now, let's just log warning for BatchJobs or set them to FAILED to require manual intervention?
-        # Or, check if images exist.
-        
-        # Safe approach for Batch: Set to FAILED with message "Server restarted during generation".
+        # 2. Reset stuck Batch Jobs to FAILED
         statement_batch = text("""
             UPDATE batchjob
             SET status = 'FAILED', error_message = 'Server restarted during initialization'

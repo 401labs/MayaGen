@@ -7,7 +7,7 @@ import asyncio
 
 from ..core import config
 from ..database import init_db
-from ..services.worker import worker_loop
+from ..services.worker import start_all_workers
 from ..helpers import api_response_helper as responses
 from . import auth, images, jobs, batch, admin
 from app.middleware.activity_logger import ActivityLoggerMiddleware
@@ -87,8 +87,8 @@ async def on_startup():
     from ..services.worker import reset_stuck_jobs
     await reset_stuck_jobs()
     
-    # Start Background Worker
-    asyncio.create_task(worker_loop())
+    # Start Background Workers (Parallel)
+    asyncio.create_task(start_all_workers())
 
 @app.get("/health")
 def health_check():
