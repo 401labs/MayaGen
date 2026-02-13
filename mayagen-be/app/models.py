@@ -27,7 +27,9 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(index=True, unique=True)
     email: str = Field(index=True, unique=True)
-    hashed_password: str
+    hashed_password: Optional[str] = None # Optional for OAuth users
+    google_id: Optional[str] = Field(default=None, index=True, unique=True, sa_column_kwargs={"unique": True})
+    avatar_url: Optional[str] = None
     role: str = Field(default="user")  # "user" or "admin"
     phone_number: Optional[str] = None
     location: Optional[str] = None
